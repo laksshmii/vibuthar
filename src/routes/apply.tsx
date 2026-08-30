@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Clock, Phone, User } from "lucide-react";
 import { courses } from "@/data/content";
+import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Eyebrow } from "@/components/section";
 import { useAuth, isValidPhone } from "@/lib/auth";
 
@@ -105,14 +106,9 @@ function ApplyPage() {
           </p>
 
           <div className="mt-8 overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
-            <img
-              src={selected.image}
-              alt={selected.title}
-              loading="lazy"
-              width={900}
-              height={500}
-              className="aspect-[16/9] w-full object-cover"
-            />
+            <div className="aspect-16/10 w-full">
+              <CourseThumbnail course={selected} />
+            </div>
             <div className="p-6">
               <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                 {selected.track}

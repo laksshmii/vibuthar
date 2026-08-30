@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { motion, useScroll, useTransform } from "motion/react";
-import { useRef } from "react";
+import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
+import { useRef, useState, useEffect } from "react";
 import {
   Play,
   Sparkles,
@@ -9,17 +9,20 @@ import {
   ArrowRight,
   Clock,
   Film,
-  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import heroImage from "@/assets/hero.jpg";
-import { courses, upcomingClasses } from "@/data/content";
+import heroClassroomImage from "@/assets/hero-classroom.jpg";
+import heroReviewImage from "@/assets/hero-answer-review.jpg";
+import { courses } from "@/data/content";
+import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Reveal, Eyebrow } from "@/components/section";
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
+  type CarouselApi,
 } from "@/components/ui/carousel";
 
 export const Route = createFileRoute("/")({
@@ -47,12 +50,74 @@ const badges = [
   { icon: Sparkles, label: "Answer clinics", sub: "every week", className: "bottom-16 left-4 sm:bottom-20 sm:left-16" },
 ];
 
+const heroSlides = [
+  {
+    id: 1,
+    src: heroClassroomImage,
+    tag: "Batch 2027 · Now open",
+    title: "The quiet craft of becoming a civil servant.",
+    titleTa: "அரசுப் பணிக்கான பயணம், அமைதியான பயிற்சியுடன்.",
+    description:
+      "Vibuthar pairs each aspirant with a mentor, a syllabus map and a filmed classroom you can return to at 5 a.m. or midnight.",
+    descriptionTa:
+      "ஒவ்வொரு மாணவருக்கும் ஒரு வழிகாட்டி, பாடத்திட்ட வரைபடம், மற்றும் விடியற்காலையிலும் நள்ளிரவிலும் பார்க்கக்கூடிய பதிவு வகுப்புகள்.",
+  },
+  {
+    id: 2,
+    src: heroReviewImage,
+    tag: "1:1 Mentorship",
+    title: "Personalized reviews for every answer script.",
+    titleTa: "ஒவ்வொரு விடைத்தாளுக்கும் தனிப்பட்ட மதிப்பீடு.",
+    description:
+      "Get targeted feedback on your mains writing strategy within 48 hours from experienced faculty.",
+    descriptionTa:
+      "உங்கள் விடை எழுதும் முறைக்கு 48 மணி நேரத்திற்குள் அனுபவம் மிக்க ஆசிரியர்களின் திருத்தமும் ஆலோசனையும்.",
+  },
+  {
+    id: 3,
+    src: heroImage,
+    tag: "On-Demand Library",
+    title: "Cinematic study sessions on your schedule.",
+    titleTa: "உங்கள் நேரத்திற்கு ஏற்ற வகுப்புகள்.",
+    description:
+      "Over 1,240+ HD filmed lectures available 24/7 with comprehensive syllabus coverage.",
+    descriptionTa:
+      "1,240-க்கும் மேற்பட்ட தரமான பதிவு வகுப்புகள், நாள் முழுவதும் கிடைக்கும் — முழுப் பாடத்திட்ட விளக்கத்துடன்.",
+  },
+] as const;
+
 function Landing() {
   const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+  const [api, setApi] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(0);
+
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
   const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
   const imageScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
   const overlayOpacity = useTransform(scrollYProgress, [0, 1], [0.45, 0.8]);
+
+  useEffect(() => {
+    if (!api) return;
+
+    setCurrent(api.selectedScrollSnap());
+    api.on("select", () => {
+      setCurrent(api.selectedScrollSnap());
+    });
+  }, [api]);
+
+  // The slides used to advance when their background video ended; now that they
+  // are stills, a timer keeps the same rhythm.
+  useEffect(() => {
+    if (!api) return;
+
+    const timer = setInterval(() => api.scrollNext(), 6500);
+    return () => clearInterval(timer);
+  }, [api]);
+
+  const activeSlide = heroSlides[current] ?? heroSlides[0];
 
   return (
     <div>
@@ -66,52 +131,126 @@ function Landing() {
             className="relative aspect-[4/4] overflow-hidden rounded-[2rem] shadow-float sm:aspect-[20/9] sm:rounded-[2.5rem]"
             style={{ perspective: 1200 }}
           >
-            <motion.img
-              src={heroImage}
-              alt="Aspirants studying in the Vibuthar reading hall at golden hour"
-              width={1600}
-              height={1008}
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ y: imageY, scale: imageScale }}
-            />
+            {/* Video & Image Background Carousel */}
             <motion.div
-              className="absolute inset-0 bg-linear-to-t from-chocolate via-chocolate/40 to-transparent"
+              className="absolute inset-0 h-full w-full"
+              style={{ y: imageY, scale: imageScale }}
+            >
+              <Carousel setApi={setApi} opts={{ loop: true, watchDrag: true }} className="h-full w-full">
+                <CarouselContent className="ml-0 h-full">
+                  {heroSlides.map((slide, index) => (
+                    <CarouselItem key={slide.id} className="relative h-full basis-full pl-0">
+                      <img
+                        src={slide.src}
+                        alt={slide.title}
+                        width={1600}
+                        height={1008}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        className="h-full w-full object-cover"
+                      />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </Carousel>
+            </motion.div>
+
+            {/* Gradient Overlay */}
+            <motion.div
+              className="pointer-events-none absolute inset-0 z-10 bg-linear-to-t from-chocolate via-chocolate/40 to-transparent"
               style={{ opacity: overlayOpacity }}
             />
+            {/* Second scrim: the classroom stills are brightest where the
+                left-aligned headline sits, so darken that side too. */}
+            <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-r from-chocolate/75 via-chocolate/30 to-transparent" />
 
-            <div className="relative flex h-full flex-col justify-end p-5 sm:p-8 lg:p-10">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                className="max-w-2xl"
-              >
-                <span className="inline-flex items-center gap-2 rounded-full border border-cream/30 bg-cream/15 px-4 py-1.5 text-xs font-semibold tracking-[0.18em] text-cream uppercase backdrop-blur-md">
-                  <Film className="h-3.5 w-3.5" /> Batch 2027 · Now open
-                </span>
-                <h1 className="mt-3 text-3xl leading-[1.08] text-cream sm:text-5xl lg:text-6xl">
-                  The quiet craft of becoming a civil servant.
-                </h1>
-                <p className="mt-3 max-w-xl text-sm text-cream/80 sm:text-base">
-                  Vibuthar pairs each aspirant with a mentor, a syllabus map and a filmed classroom you
-                  can return to at 5 a.m. or midnight.
-                </p>
+            {/* Dynamic Text Content (Syncs with Active Slide) */}
+            <div className="relative z-20 flex h-full flex-col justify-end p-5 sm:p-8 lg:p-10">
+              <div className="max-w-2xl">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={current}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                  >
+                    <span className="inline-flex items-center gap-2 rounded-full border border-cream/30 bg-cream/15 px-4 py-1.5 text-xs font-semibold tracking-[0.18em] text-cream uppercase backdrop-blur-md">
+                      <Film className="h-3.5 w-3.5" /> {activeSlide.tag}
+                    </span>
+                    <h1 className="mt-3 text-3xl leading-[1.08] text-cream sm:text-5xl lg:text-6xl">
+                      {activeSlide.title}
+                    </h1>
+                    <p className="mt-2 max-w-xl text-base font-semibold text-cream/90 text-tamil sm:text-xl">
+                      {activeSlide.titleTa}
+                    </p>
+                    <p className="mt-3 max-w-xl text-sm text-cream/80 sm:text-base">
+                      {activeSlide.description}
+                    </p>
+                    <p className="mt-1 hidden max-w-xl text-sm text-cream/75 text-tamil sm:block">
+                      {activeSlide.descriptionTa}
+                    </p>
+                  </motion.div>
+                </AnimatePresence>
+
                 <div className="mt-5 flex flex-wrap items-center gap-3">
                   <Link
                     to="/courses"
                     className="group inline-flex items-center gap-2 rounded-full bg-gold-gradient px-7 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
                   >
-                    Explore courses
+                    <span>
+                      Explore courses
+                      <span className="block text-xs font-medium opacity-90 text-tamil">
+                        பாடநெறிகளைப் பாருங்கள்
+                      </span>
+                    </span>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
                   <Link
                     to="/library"
-                    className="inline-flex items-center gap-2 rounded-full border border-cream/40 bg-cream/10 px-6 py-3.5 text-sm font-semibold text-cream backdrop-blur-md transition-colors hover:bg-cream/20"
+                    className="inline-flex items-center gap-2 rounded-full border border-cream/40 bg-cream/10 px-6 py-3 text-sm font-semibold text-cream backdrop-blur-md transition-colors hover:bg-cream/20"
                   >
-                    <Play className="h-4 w-4" /> Watch a class
+                    <Play className="h-4 w-4" />
+                    <span>
+                      Watch a class
+                      <span className="block text-xs font-medium opacity-90 text-tamil">
+                        வகுப்பைப் பாருங்கள்
+                      </span>
+                    </span>
                   </Link>
                 </div>
-              </motion.div>
+              </div>
+            </div>
+
+            {/* Manual Slide Navigation Controls & Indicators */}
+            <div className="absolute bottom-6 right-6 z-30 flex items-center gap-3">
+              <div className="flex gap-1.5">
+                {heroSlides.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => api?.scrollTo(idx)}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      current === idx ? "w-7 bg-cream" : "w-2 bg-cream/40"
+                    }`}
+                    aria-label={`Go to slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => api?.scrollPrev()}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-cream/30 bg-cream/15 text-cream backdrop-blur-md transition hover:bg-cream/30"
+                  aria-label="Previous slide"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => api?.scrollNext()}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-cream/30 bg-cream/15 text-cream backdrop-blur-md transition hover:bg-cream/30"
+                  aria-label="Next slide"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Floating badges */}
@@ -125,7 +264,7 @@ function Landing() {
                   scale: { duration: 0.6, delay: 0.6 + i * 0.15 },
                   y: { duration: 6 + i, repeat: Infinity, ease: "easeInOut", delay: 0.6 + i * 0.2 },
                 }}
-                className={`absolute hidden items-center gap-3 rounded-2xl px-4 py-3 glass-card md:flex ${badge.className}`}
+                className={`absolute z-20 hidden items-center gap-3 rounded-2xl px-4 py-3 glass-card md:flex ${badge.className}`}
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold-gradient text-primary-foreground">
                   <badge.icon className="h-4 w-4" />
@@ -157,82 +296,6 @@ function Landing() {
         </Reveal>
       </section>
 
-      {/* What's next — upcoming classes carousel */}
-      <section className="px-5 pb-24 sm:px-8">
-        <div className="mx-auto max-w-7xl">
-          <Carousel opts={{ align: "start", loop: true }}>
-            <Reveal className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
-              <div>
-                <Eyebrow>What's next</Eyebrow>
-                <h2 className="mt-4 max-w-xl text-3xl sm:text-5xl">
-                  Next <span className="text-gold-gradient">classes</span> on the calendar.
-                </h2>
-                <p className="mt-4 max-w-lg text-sm text-muted-foreground">
-                  Live sessions you can sit in on this fortnight. Apply once and your seat carries
-                  across the batch.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <CarouselPrevious className="static h-10 w-10 translate-y-0 border-border bg-card shadow-soft" />
-                <CarouselNext className="static h-10 w-10 translate-y-0 border-border bg-card shadow-soft" />
-              </div>
-            </Reveal>
-
-            <CarouselContent className="mt-10">
-              {upcomingClasses.map((item) => (
-                <CarouselItem key={item.id} className="sm:basis-1/2 lg:basis-1/3">
-                  <motion.article
-                    whileHover={{ y: -8 }}
-                    transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                    className="flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft"
-                  >
-                    <div className="relative aspect-16/10 overflow-hidden">
-                      <img
-                        src={item.image}
-                        alt={item.title}
-                        loading="lazy"
-                        width={900}
-                        height={560}
-                        className="h-full w-full object-cover"
-                      />
-                      <span className="absolute top-4 left-4 rounded-full bg-card/85 px-3 py-1 text-xs font-semibold tracking-wide backdrop-blur-md">
-                        {item.mode}
-                      </span>
-                    </div>
-                    <div className="flex flex-1 flex-col p-6">
-                      <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                        {item.track} · {item.faculty}
-                      </span>
-                      <h3 className="mt-2 text-lg leading-snug">{item.title}</h3>
-                      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                          <CalendarDays className="h-4 w-4" /> {item.day}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Clock className="h-4 w-4" /> {item.time}
-                        </span>
-                      </div>
-                      <div className="mt-5 flex items-center justify-between border-t border-border pt-5">
-                        <span className="text-xs font-semibold text-chocolate">
-                          {item.seatsLeft} seats left
-                        </span>
-                        <Link
-                          to="/apply"
-                          search={{ course: "" }}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold transition-colors hover:bg-secondary"
-                        >
-                          Apply <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      </div>
-                    </div>
-                  </motion.article>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-      </section>
-
       {/* Course preview */}
       <section className="px-5 pb-24 sm:px-8">
         <div className="mx-auto max-w-7xl">
@@ -240,8 +303,11 @@ function Landing() {
             <div>
               <Eyebrow>Programmes</Eyebrow>
               <h2 className="mt-4 max-w-xl text-3xl sm:text-5xl">
-                Three tracks, one <span className="text-gold-gradient">unhurried</span> method.
+                Many tracks, one <span className="text-gold-gradient">unhurried</span> method.
               </h2>
+              <p className="mt-3 max-w-xl text-base font-semibold text-chocolate text-tamil sm:text-lg">
+                பல பாதைகள், ஒரே நிதானமான முறை.
+              </p>
             </div>
             <Link
               to="/courses"
@@ -261,13 +327,9 @@ function Landing() {
                   className="h-full overflow-hidden rounded-3xl border border-border bg-card shadow-soft"
                 >
                   <div className="aspect-16/10 overflow-hidden">
-                    <img
-                      src={course.image}
-                      alt={course.title}
-                      loading="lazy"
-                      width={900}
-                      height={700}
-                      className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
+                    <CourseThumbnail
+                      course={course}
+                      className="transition-transform duration-700 hover:scale-105"
                     />
                   </div>
                   <div className="p-6">
@@ -275,7 +337,10 @@ function Landing() {
                       {course.track}
                     </span>
                     <h3 className="mt-2 text-xl">{course.title}</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">{course.blurb}</p>
+                    <p className="mt-1 text-sm font-semibold text-chocolate text-tamil">
+                      {course.titleTa}
+                    </p>
+                    <p className="mt-3 text-sm text-muted-foreground">{course.blurb}</p>
                     <div className="mt-5 flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="h-4 w-4" /> {course.duration}
@@ -307,15 +372,21 @@ function Landing() {
                 <Link
                   to="/apply"
                   search={{ course: "" }}
-                  className="rounded-full bg-gold-gradient px-8 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+                  className="rounded-full bg-gold-gradient px-8 py-3 text-center text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
                 >
                   Apply now
+                  <span className="block text-xs font-medium opacity-90 text-tamil">
+                    இப்போது விண்ணப்பிக்க
+                  </span>
                 </Link>
                 <Link
                   to="/about"
-                  className="rounded-full border border-cream/30 px-7 py-3.5 text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
+                  className="rounded-full border border-cream/30 px-7 py-3 text-center text-sm font-semibold text-cream transition-colors hover:bg-cream/10"
                 >
                   Meet the faculty
+                  <span className="block text-xs font-medium opacity-90 text-tamil">
+                    ஆசிரியர்களை அறிக
+                  </span>
                 </Link>
               </div>
             </div>

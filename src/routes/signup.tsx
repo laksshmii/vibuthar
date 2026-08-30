@@ -62,8 +62,14 @@ function SignupPage() {
         <div className="text-center">
           <Eyebrow>Create account</Eyebrow>
           <h1 className="mt-5 text-4xl">Start with us.</h1>
+          <p className="mt-2 text-lg font-semibold text-chocolate text-tamil">
+            எங்களுடன் தொடங்குங்கள்.
+          </p>
           <p className="mt-3 text-sm text-muted-foreground">
             An account is free. Apply to a programme whenever you are ready.
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground text-tamil">
+            கணக்கு தொடங்குவது இலவசம். நீங்கள் தயாராகும் போது பாடநெறிக்கு விண்ணப்பிக்கலாம்.
           </p>
         </div>
 
@@ -72,7 +78,7 @@ function SignupPage() {
           className="mt-8 rounded-3xl border border-border bg-card p-7 shadow-float"
         >
           <label className="block text-sm font-medium" htmlFor="name">
-            Full name
+            Full name <span className="text-muted-foreground text-tamil">· முழுப் பெயர்</span>
           </label>
           <div className="mt-2 flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 focus-within:ring-2 focus-within:ring-ring">
             <User className="h-4 w-4 text-muted-foreground" />
@@ -86,7 +92,7 @@ function SignupPage() {
           </div>
 
           <label className="mt-5 block text-sm font-medium" htmlFor="phone">
-            Mobile number
+            Mobile number <span className="text-muted-foreground text-tamil">· கைபேசி எண்</span>
           </label>
           <div className="mt-2 flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 focus-within:ring-2 focus-within:ring-ring">
             <Phone className="h-4 w-4 text-muted-foreground" />
@@ -105,7 +111,7 @@ function SignupPage() {
           </div>
 
           <label className="mt-5 block text-sm font-medium" htmlFor="password">
-            Password
+            Password <span className="text-muted-foreground text-tamil">· கடவுச்சொல்</span>
           </label>
           <div className="mt-2 flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 focus-within:ring-2 focus-within:ring-ring">
             <Lock className="h-4 w-4 text-muted-foreground" />
@@ -125,7 +131,12 @@ function SignupPage() {
             type="submit"
             className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
           >
-            Create account
+            <span>
+              Create account
+              <span className="block text-xs font-medium opacity-90 text-tamil">
+                கணக்கு தொடங்குக
+              </span>
+            </span>
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button>
 
@@ -136,8 +147,9 @@ function SignupPage() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
+          <span className="text-tamil">ஏற்கனவே கணக்கு உள்ளதா?</span>{" "}
           <Link to="/login" className="font-semibold text-chocolate underline-offset-4 hover:underline">
-            Log in
+            Log in <span className="text-tamil">· உள்நுழைவு</span>
           </Link>
         </p>
       </motion.div>

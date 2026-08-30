@@ -6,16 +6,20 @@ import { Reveal, Eyebrow } from "@/components/section";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About Vibuthar | UPSC Mentors Since 2009" },
+      { title: "About Vibuthar Academy | TNPSC, TET & Police Coaching" },
       {
         name: "description",
         content:
-          "Vibuthar is a small-batch UPSC academy in its seventeenth year — retired administrators, subject scholars and a mentor for every twelve aspirants.",
+          "Vibuthar Academy teaches TNPSC, TET and TNUSRB Police aspirants in Tamil from Sankarankovil, Puliangudi and Kadayam — capped batches and answer key classes after every test.",
       },
-      { property: "og:title", content: "About Vibuthar | UPSC Mentors Since 2009" },
+      {
+        property: "og:title",
+        content: "About Vibuthar Academy | TNPSC, TET & Police Coaching",
+      },
       {
         property: "og:description",
-        content: "Small batches, senior faculty and an unhurried method for Civil Services aspirants.",
+        content:
+          "Capped batches, subject teachers who stay with the same paper for years, and an answer key class after every test.",
       },
     ],
   }),
@@ -26,16 +30,19 @@ const pillars = [
   {
     icon: Compass,
     title: "A map before a marathon",
+    titleTa: "நெடுந்தூர ஓட்டத்திற்கு முன் ஒரு வரைபடம்",
     body: "Every aspirant starts with a syllabus audit and a week-by-week route rather than a stack of books.",
   },
   {
     icon: BookOpen,
     title: "Sources, not summaries",
+    titleTa: "சுருக்கங்கள் அல்ல, மூல நூல்கள்",
     body: "We teach from primary reports, committee texts and editorials — the same material the board reads.",
   },
   {
     icon: HeartHandshake,
     title: "Mentors who remember you",
+    titleTa: "உங்களை நினைவில் வைக்கும் ஆசிரியர்கள்",
     body: "One mentor for twelve aspirants, with monthly reviews that track morale as closely as marks.",
   },
 ];
@@ -48,17 +55,22 @@ function AboutPage() {
           <Reveal>
             <Eyebrow>Since 2009</Eyebrow>
             <h1 className="mt-5 text-4xl sm:text-6xl">
-              A small academy that refuses to <span className="text-gold-gradient">scale</span>.
+              A classroom where no one is a <span className="text-gold-gradient">number</span>.
             </h1>
+            <p className="mt-4 text-lg font-semibold text-chocolate text-tamil sm:text-xl">
+              எந்த மாணவரும் வெறும் எண் அல்ல.
+            </p>
             <p className="mt-6 text-muted-foreground">
-              Vibuthar began in a two-room library in Thiruvananthapuram with nine aspirants and one
-              retired district collector. Seventeen years later we still cap each batch at sixty, because
-              the part of this exam that cannot be taught at scale is judgment.
+              Vibuthar began in Sankarankovil with one rented classroom and a handful of students
+              preparing for the TNPSC exams. That same room now has company in Puliangudi and
+              Kadayam, and every batch is still capped on purpose — the part of these exams that
+              cannot be taught to a crowd is judgment.
             </p>
             <p className="mt-4 text-muted-foreground">
-              Our faculty is a mix of serving-turned-retired administrators, university scholars and
-              alumni who cleared with us. They teach the same three subjects for years, and it shows in
-              how precisely they answer a doubt.
+              Our teachers stay with the same subjects year after year — General Tamil, Maths and
+              Reasoning, General Studies, Child Development and Pedagogy — and they teach in Tamil,
+              the language you will write the paper in. After every test they take the answer key
+              question by question, which is where most of the learning actually happens.
             </p>
             <Link
               to="/courses"
@@ -96,6 +108,7 @@ function AboutPage() {
                   <p.icon className="h-5 w-5" />
                 </span>
                 <h2 className="mt-5 text-xl">{p.title}</h2>
+                <p className="mt-1 text-sm font-semibold text-chocolate text-tamil">{p.titleTa}</p>
                 <p className="mt-2 text-sm text-muted-foreground">{p.body}</p>
               </div>
             </Reveal>

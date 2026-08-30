@@ -1,9 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { useState } from "react";
-import { Lock, Play, Search, Bookmark, LayoutGrid, GraduationCap, FileText, LifeBuoy } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Lock, Play, Search, LayoutGrid, X, Youtube } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { videos, subjects } from "@/data/content";
+import {
+  courses,
+  videos,
+  youtubeChannelUrl,
+  youtubeEmbed,
+  youtubeThumb,
+  type Video,
+} from "@/data/content";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/library")({
@@ -13,12 +20,12 @@ export const Route = createFileRoute("/library")({
       {
         name: "description",
         content:
-          "The Vibuthar on-demand video library: filmed lectures on Polity, Geography, Economy, Ethics and answer writing for enrolled UPSC aspirants.",
+          "The Vibuthar on-demand video library: TNPSC Group II, II-A and IV, TN TET and TNUSRB Police classes with answer key explanations.",
       },
       { property: "og:title", content: "Video Library | Vibuthar Academy" },
       {
         property: "og:description",
-        content: "Filmed UPSC lectures on demand for enrolled Vibuthar aspirants.",
+        content: "TNPSC, TET and Police classes on demand for Vibuthar students.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -61,99 +68,90 @@ function LockedState() {
   );
 }
 
-const sidebarNav = [
-  { icon: LayoutGrid, label: "All lectures" },
-  { icon: Bookmark, label: "Saved" },
-  { icon: FileText, label: "Answer scripts" },
-  { icon: GraduationCap, label: "Mentor notes" },
-  { icon: LifeBuoy, label: "Support" },
+const ALL = "all";
+
+const tabs = [
+  { id: ALL, label: "All lectures", labelTa: "அனைத்து வகுப்புகள்" },
+  ...courses.map((c) => ({ id: c.id, label: c.shortTitle, labelTa: c.titleTa })),
 ];
 
-function Library({ name }: { name: string }) {
-  const [subject, setSubject] = useState("All");
-  const [query, setQuery] = useState("");
-  const [section, setSection] = useState("All lectures");
+const countFor = (tabId: string) =>
+  tabId === ALL ? videos.length : videos.filter((v) => v.courseId === tabId).length;
 
+function Library({ name }: { name: string }) {
+  const [tab, setTab] = useState(ALL);
+  const [query, setQuery] = useState("");
+  const [playing, setPlaying] = useState<Video | null>(null);
+
+  const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0]!;
   const list = videos.filter(
     (v) =>
-      (subject === "All" || v.subject === subject) &&
-      (v.title.toLowerCase().includes(query.toLowerCase()) ||
-        v.faculty.toLowerCase().includes(query.toLowerCase())),
+      (tab === ALL || v.courseId === tab) &&
+      v.title.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
-    <div className="mx-auto flex max-w-7xl gap-8 px-5 py-10 sm:px-8">
-      {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 lg:block">
-        <div className="sticky top-28 rounded-3xl border border-border bg-card p-5 shadow-soft">
-          <p className="px-2 text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Library
-          </p>
-          <nav className="mt-3 flex flex-col gap-1">
-            {sidebarNav.map((item) => (
-              <button
-                key={item.label}
-                onClick={() => setSection(item.label)}
-                className={cn(
-                  "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
-                  section === item.label
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="mt-6 rounded-2xl bg-chocolate p-5">
-            <p className="font-serif text-lg text-cream">Prelims in 214 days</p>
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-cream/20">
-              <div className="h-full w-[42%] rounded-full bg-gold-gradient" />
-            </div>
-            <p className="mt-2 text-xs text-cream/70">42% of your syllabus map complete</p>
+    <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
+      <div className="min-w-0">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <div>
+            <p className="text-sm text-muted-foreground">Welcome back, {name}</p>
+            <h1 className="mt-1 text-3xl sm:text-4xl">{activeTab.label}</h1>
+            <p className="mt-1 text-sm text-muted-foreground text-tamil">{activeTab.labelTa}</p>
           </div>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="min-w-0 flex-1">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <p className="text-sm text-muted-foreground">Welcome back, {name}</p>
-          <h1 className="mt-1 text-3xl sm:text-4xl">{section}</h1>
+          <a
+            href={youtubeChannelUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 self-start rounded-full bg-chocolate px-5 py-3 text-sm font-semibold text-cream transition-opacity hover:opacity-90 sm:self-auto"
+          >
+            <Youtube className="h-4 w-4" /> Our YouTube channel
+          </a>
         </motion.div>
 
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex flex-1 items-center gap-3 rounded-full border border-border bg-card px-4 py-3 shadow-soft focus-within:ring-2 focus-within:ring-ring">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search lectures or faculty"
-              className="w-full bg-transparent text-sm outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-          {subjects.map((s) => (
+        {/* One tab per course, always visible */}
+        <div className="mt-7 -mx-5 flex gap-2 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0">
+          {tabs.map((item) => (
             <button
-              key={s}
-              onClick={() => setSubject(s)}
+              key={item.id}
+              onClick={() => setTab(item.id)}
               className={cn(
-                "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-all",
-                subject === s
+                "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
+                tab === item.id
                   ? "border-transparent bg-gold-gradient text-primary-foreground shadow-gold"
                   : "border-border bg-card text-muted-foreground hover:text-foreground",
               )}
             >
-              {s}
+              {item.id === ALL && <LayoutGrid className="h-4 w-4" />}
+              {item.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-xs",
+                  tab === item.id ? "bg-cream/25" : "bg-secondary",
+                )}
+              >
+                {countFor(item.id)}
+              </span>
             </button>
           ))}
         </div>
 
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 flex items-center gap-3 rounded-full border border-border bg-card px-4 py-3 shadow-soft focus-within:ring-2 focus-within:ring-ring">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search lectures"
+            className="w-full bg-transparent text-sm outline-none"
+          />
+        </div>
+
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <AnimatePresence mode="popLayout">
             {list.map((video, i) => (
               <motion.article
@@ -164,41 +162,44 @@ function Library({ name }: { name: string }) {
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ duration: 0.4, delay: i * 0.04 }}
                 whileHover={{ y: -6 }}
-                className="group overflow-hidden rounded-3xl border border-border bg-card shadow-soft"
+                className="group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft"
               >
-                <div className="relative aspect-16/10 overflow-hidden">
+                <button
+                  onClick={() => setPlaying(video)}
+                  onContextMenu={(e) => e.preventDefault()}
+                  aria-label={`Play ${video.title}`}
+                  className="relative aspect-16/9 overflow-hidden"
+                >
                   <img
-                    src={video.thumb}
-                    alt={video.title}
+                    src={youtubeThumb(video.id)}
+                    alt=""
                     loading="lazy"
-                    width={900}
-                    height={700}
+                    draggable={false}
+                    width={480}
+                    height={360}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-linear-to-t from-chocolate/70 to-transparent opacity-70" />
                   <span className="absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-13 w-13 items-center justify-center rounded-full bg-gold-gradient text-primary-foreground opacity-0 shadow-gold transition-all duration-300 group-hover:scale-110 group-hover:opacity-100">
+                    <span className="flex h-13 w-13 items-center justify-center rounded-full bg-gold-gradient text-primary-foreground shadow-gold transition-all duration-300 group-hover:scale-110">
                       <Play className="h-5 w-5" />
                     </span>
                   </span>
                   <span className="absolute right-3 bottom-3 rounded-full bg-chocolate/80 px-2.5 py-1 text-xs font-medium text-cream backdrop-blur-md">
                     {video.duration}
                   </span>
-                  {video.progress > 0 && (
-                    <span className="absolute inset-x-0 bottom-0 h-1 bg-cream/30">
-                      <span
-                        className="block h-full bg-gold-gradient"
-                        style={{ width: `${video.progress}%` }}
-                      />
-                    </span>
-                  )}
-                </div>
-                <div className="p-5">
+                </button>
+                <div className="flex flex-1 flex-col p-5">
                   <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                    {video.subject}
+                    {courses.find((c) => c.id === video.courseId)?.shortTitle}
                   </span>
-                  <h2 className="mt-2 text-base leading-snug font-semibold">{video.title}</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">{video.faculty}</p>
+                  <h2 className="mt-2 flex-1 text-base leading-snug font-semibold">{video.title}</h2>
+                  <button
+                    onClick={() => setPlaying(video)}
+                    className="mt-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-chocolate underline-offset-4 hover:underline"
+                  >
+                    <Play className="h-3.5 w-3.5" /> Watch now
+                  </button>
                 </div>
               </motion.article>
             ))}
@@ -211,6 +212,76 @@ function Library({ name }: { name: string }) {
           </p>
         )}
       </div>
+
+      <VideoPlayer video={playing} onClose={() => setPlaying(null)} />
     </div>
+  );
+}
+
+function VideoPlayer({ video, onClose }: { video: Video | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!video) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [video, onClose]);
+
+  return (
+    <AnimatePresence>
+      {video && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-label={video.title}
+          className="fixed inset-0 z-100 flex items-center justify-center bg-chocolate/80 p-4 backdrop-blur-sm sm:p-8"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+            className="w-full max-w-4xl overflow-hidden rounded-3xl bg-card shadow-float select-none"
+          >
+            <div className="aspect-video w-full bg-chocolate">
+              <iframe
+                key={video.id}
+                src={youtubeEmbed(video.id)}
+                title={video.title}
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full"
+              />
+            </div>
+            <div className="flex items-start justify-between gap-4 p-5">
+              <div className="min-w-0">
+                <h2 className="text-base leading-snug font-semibold">{video.title}</h2>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  For enrolled Vibuthar students only. Please do not share or re-upload.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                aria-label="Close player"
+                className="shrink-0 rounded-full border border-border p-2 transition-colors hover:bg-secondary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

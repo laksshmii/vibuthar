@@ -24,7 +24,7 @@ export function SiteHeader() {
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-gradient font-serif text-lg text-primary-foreground shadow-gold">
             V
           </span>
-          <span className="font-serif text-xl tracking-tight">Vibuthar</span>
+          <span className="font-serif text-xl tracking-tight">Vibuthar Academy</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

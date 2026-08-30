@@ -100,6 +100,15 @@ function LoginPage() {
             />
           </div>
 
+          <div className="mt-3 flex justify-end">
+            <Link
+              to="/forgot-password"
+              className="text-sm font-semibold text-chocolate underline-offset-4 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
           <button
