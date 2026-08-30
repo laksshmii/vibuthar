@@ -15,7 +15,7 @@ import {
 import heroImage from "@/assets/hero.jpg";
 import heroClassroomImage from "@/assets/hero-classroom.jpg";
 import heroReviewImage from "@/assets/hero-answer-review.jpg";
-import { courses } from "@/data/content";
+import { useCourses } from "@/lib/catalog";
 import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Reveal, Eyebrow } from "@/components/section";
 import {
@@ -87,6 +87,7 @@ const heroSlides = [
 ] as const;
 
 function Landing() {
+  const courses = useCourses();
   const heroRef = useRef<HTMLDivElement>(null);
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);

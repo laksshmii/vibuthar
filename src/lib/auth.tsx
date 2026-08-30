@@ -1,14 +1,19 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { findUser, upsertUser } from "@/lib/directory";
 
-type User = { name: string; phone: string };
+export type UserRole = "admin" | "student";
+export type User = { name: string; phone: string; role: UserRole };
 
 type AuthValue = {
   user: User | null;
   ready: boolean;
-  login: (phone: string) => void;
-  signup: (name: string, phone: string) => void;
+  login: (phone: string) => User;
+  signup: (name: string, phone: string, password?: string) => User;
   logout: () => void;
 };
+
+/** Office mobile — signing in with this number opens the admin desk. */
+export const ADMIN_PHONE = "8248942219";
 
 const STORAGE_KEY = "vibuthar.mock.user";
 
@@ -22,10 +27,32 @@ export function isValidPhone(phone: string) {
   return normalizePhone(phone).length === 10;
 }
 
+export function isAdminPhone(phone: string) {
+  return normalizePhone(phone) === ADMIN_PHONE;
+}
+
+export function homeFor(user: User) {
+  return user.role === "admin" ? "/admin" : "/library";
+}
+
+function toUser(name: string, phone: string): User {
+  const normalized = normalizePhone(phone);
+  const existing = findUser(normalized);
+  const admin = normalized === ADMIN_PHONE || existing?.role === "admin";
+  return {
+    name: existing?.name || (admin ? "Admin" : name.trim() || "Aspirant"),
+    phone: normalized,
+    role: admin ? "admin" : "student",
+  };
+}
+
 function readStoredUser(): User | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { name?: string; phone?: string };
+    if (!parsed.phone) return null;
+    return toUser(parsed.name ?? "Aspirant", parsed.phone);
   } catch {
     return null;
   }
@@ -45,19 +72,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       login: (phone: string) => {
-        const normalized = normalizePhone(phone);
         const previous = readStoredUser();
-        const next = {
-          name: previous?.phone === normalized ? previous.name : "Aspirant",
-          phone: normalized,
-        };
+        const normalized = normalizePhone(phone);
+        const keptName =
+          previous?.phone === normalized && previous.role !== "admin" ? previous.name : "Aspirant";
+        const next = toUser(keptName, normalized);
+        upsertUser(next);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         setUser(next);
+        return next;
       },
-      signup: (name: string, phone: string) => {
-        const next = { name: name.trim() || "Aspirant", phone: normalizePhone(phone) };
+      signup: (name: string, phone: string, password?: string) => {
+        const next = toUser(name, phone);
+        upsertUser({ ...next, password });
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         setUser(next);
+        return next;
       },
       logout: () => {
         window.localStorage.removeItem(STORAGE_KEY);

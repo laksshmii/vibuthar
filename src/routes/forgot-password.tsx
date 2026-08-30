@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Mail, Phone } from "lucide-react";
+import { ArrowRight, Lock, Phone } from "lucide-react";
 import { isValidPhone, normalizePhone } from "@/lib/auth";
-import { officeEmail, officePhone } from "@/data/content";
+import { findUser, setUserPassword } from "@/lib/directory";
 import { Eyebrow } from "@/components/section";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -12,13 +12,12 @@ export const Route = createFileRoute("/forgot-password")({
       { title: "Forgot password | Vibuthar Academy" },
       {
         name: "description",
-        content:
-          "Reset your Vibuthar student password. Enter the mobile number on your account and the academy office will help you get back in.",
+        content: "Reset your Vibuthar student password with your registered mobile number.",
       },
       { property: "og:title", content: "Forgot password | Vibuthar Academy" },
       {
         property: "og:description",
-        content: "Reset your Vibuthar student password with help from the academy office.",
+        content: "Enter your mobile number and set a new password.",
       },
     ],
   }),
@@ -26,23 +25,44 @@ export const Route = createFileRoute("/forgot-password")({
 });
 
 function ForgotPasswordPage() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<"phone" | "password">("phone");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
 
-  const officeDigits = officePhone.href.replace(/\D/g, "");
-  const whatsappHref = `https://wa.me/${officeDigits}?text=${encodeURIComponent(
-    `Hello Vibuthar Academy, I forgot the password for the student account on +91 ${normalizePhone(phone) || "__________"}. Please help me reset it.`,
-  )}`;
-
-  function onSubmit(e: React.FormEvent) {
+  function onPhoneSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidPhone(phone)) {
       setError("Enter the 10-digit mobile number on your account.");
       return;
     }
+    if (!findUser(phone)) {
+      setError("No account found for this mobile number.");
+      return;
+    }
     setError("");
-    setSubmitted(true);
+    setStep("password");
+  }
+
+  function onPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 4) {
+      setError("New password must be at least 4 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("New password and confirmation do not match.");
+      return;
+    }
+    try {
+      setUserPassword(phone, password);
+      setError("");
+      navigate({ to: "/login" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reset this password.");
+    }
   }
 
   return (
@@ -55,52 +75,17 @@ function ForgotPasswordPage() {
       >
         <div className="text-center">
           <Eyebrow>Student access</Eyebrow>
-          <h1 className="mt-5 text-4xl">{submitted ? "Ask the office." : "Forgot password?"}</h1>
+          <h1 className="mt-5 text-4xl">Forgot password?</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            {submitted
-              ? "Passwords are reset by the academy office, not from this page. Call, WhatsApp or email with the number below."
-              : "Enter the mobile number on your account. We will tell you how to get a new password from the office."}
+            {step === "phone"
+              ? "Enter the 10-digit mobile number on your account."
+              : `Set a new password for +91 ${normalizePhone(phone)}.`}
           </p>
         </div>
 
-        {submitted ? (
-          <div className="mt-8 rounded-3xl border border-border bg-card p-7 shadow-float">
-            <p className="text-sm text-muted-foreground">
-              Account on{" "}
-              <span className="font-semibold text-foreground">+91 {normalizePhone(phone)}</span>
-            </p>
-            <div className="mt-5 flex flex-col gap-3">
-              <a
-                href={officePhone.href}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
-              >
-                <Phone className="h-4 w-4" /> Call {officePhone.label}
-              </a>
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-6 py-3.5 text-sm font-semibold transition-colors hover:bg-secondary"
-              >
-                WhatsApp the office
-              </a>
-              <a
-                href={officeEmail.href}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-6 py-3.5 text-sm font-semibold transition-colors hover:bg-secondary"
-              >
-                <Mail className="h-4 w-4" /> {officeEmail.label}
-              </a>
-            </div>
-            <Link
-              to="/login"
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 text-sm font-semibold text-chocolate underline-offset-4 hover:underline"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to log in
-            </Link>
-          </div>
-        ) : (
+        {step === "phone" ? (
           <form
-            onSubmit={onSubmit}
+            onSubmit={onPhoneSubmit}
             className="mt-8 rounded-3xl border border-border bg-card p-7 shadow-float"
           >
             <label className="block text-sm font-medium" htmlFor="reset-phone">
@@ -118,7 +103,7 @@ function ForgotPasswordPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full bg-transparent text-sm outline-none"
-                placeholder="98765 43210"
+                placeholder="Enter 10 digit mobile number"
               />
             </div>
 
@@ -132,16 +117,74 @@ function ForgotPasswordPage() {
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
           </form>
+        ) : (
+          <form
+            onSubmit={onPasswordSubmit}
+            className="mt-8 rounded-3xl border border-border bg-card p-7 shadow-float"
+          >
+            <label className="block text-sm font-medium" htmlFor="new-password">
+              New password
+            </label>
+            <div className="mt-2 flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 focus-within:ring-2 focus-within:ring-ring">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              <input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-transparent text-sm outline-none"
+                placeholder="Enter new password"
+              />
+            </div>
+
+            <label className="mt-5 block text-sm font-medium" htmlFor="confirm-password">
+              Confirm password
+            </label>
+            <div className="mt-2 flex items-center gap-3 rounded-full border border-border bg-background px-4 py-3 focus-within:ring-2 focus-within:ring-ring">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              <input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="w-full bg-transparent text-sm outline-none"
+                placeholder="Re-enter new password"
+              />
+            </div>
+
+            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+
+            <button
+              type="submit"
+              className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+            >
+              Submit
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("phone");
+                setPassword("");
+                setConfirm("");
+                setError("");
+              }}
+              className="mt-4 w-full text-center text-sm font-semibold text-chocolate underline-offset-4 hover:underline"
+            >
+              Use a different number
+            </button>
+          </form>
         )}
 
-        {!submitted && (
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Remembered it?{" "}
-            <Link to="/login" className="font-semibold text-chocolate underline-offset-4 hover:underline">
-              Log in
-            </Link>
-          </p>
-        )}
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Remembered it?{" "}
+          <Link to="/login" className="font-semibold text-chocolate underline-offset-4 hover:underline">
+            Log in
+          </Link>
+        </p>
       </motion.div>
     </div>
   );

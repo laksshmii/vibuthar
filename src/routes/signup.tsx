@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Phone, User } from "lucide-react";
-import { useAuth, isValidPhone } from "@/lib/auth";
+import { useAuth, isValidPhone, homeFor } from "@/lib/auth";
 import { Eyebrow } from "@/components/section";
 
 export const Route = createFileRoute("/signup")({
@@ -33,7 +33,7 @@ function SignupPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (user) navigate({ to: "/library", replace: true });
+    if (user) navigate({ to: homeFor(user), replace: true });
   }, [user, navigate]);
 
   function onSubmit(e: React.FormEvent) {
@@ -47,8 +47,8 @@ function SignupPage() {
       return;
     }
     setError("");
-    signup(name, phone);
-    navigate({ to: "/library" });
+    const next = signup(name, phone, password);
+    navigate({ to: homeFor(next) });
   }
 
   return (
@@ -106,7 +106,7 @@ function SignupPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full bg-transparent text-sm outline-none"
-              placeholder="98765 43210"
+              placeholder="Enter 10 digit mobile number"
             />
           </div>
 

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const nav = [
+const publicNav = [
   { to: "/", label: "Home" },
   { to: "/courses", label: "Courses" },
   { to: "/about", label: "About" },
@@ -16,6 +16,10 @@ export function SiteHeader() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const nav =
+    user?.role === "admin"
+      ? ([...publicNav, { to: "/admin", label: "Admin" }] as const)
+      : publicNav;
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -45,7 +49,9 @@ export function SiteHeader() {
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
-              <span className="text-sm text-muted-foreground">{user.name}</span>
+              <span className="text-sm text-muted-foreground">
+                {user.role === "admin" ? "Admin" : user.name}
+              </span>
               <button
                 onClick={logout}
                 className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"

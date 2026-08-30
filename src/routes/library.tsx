@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { Lock, Play, Search, LayoutGrid, X, Youtube } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useCourses } from "@/lib/catalog";
 import {
-  courses,
   videos,
   youtubeChannelUrl,
   youtubeEmbed,
@@ -70,15 +70,14 @@ function LockedState() {
 
 const ALL = "all";
 
-const tabs = [
-  { id: ALL, label: "All lectures", labelTa: "அனைத்து வகுப்புகள்" },
-  ...courses.map((c) => ({ id: c.id, label: c.shortTitle, labelTa: c.titleTa })),
-];
-
-const countFor = (tabId: string) =>
-  tabId === ALL ? videos.length : videos.filter((v) => v.courseId === tabId).length;
-
 function Library({ name }: { name: string }) {
+  const courses = useCourses();
+  const tabs = [
+    { id: ALL, label: "All lectures", labelTa: "அனைத்து வகுப்புகள்" },
+    ...courses.map((c) => ({ id: c.id, label: c.shortTitle, labelTa: c.titleTa })),
+  ];
+  const countFor = (tabId: string) =>
+    tabId === ALL ? videos.length : videos.filter((v) => v.courseId === tabId).length;
   const [tab, setTab] = useState(ALL);
   const [query, setQuery] = useState("");
   const [playing, setPlaying] = useState<Video | null>(null);

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ArrowRight, Clock, PlayCircle } from "lucide-react";
-import { courses } from "@/data/content";
+import { useCourses } from "@/lib/catalog";
 import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Reveal, Eyebrow } from "@/components/section";
 import { cn } from "@/lib/utils";
@@ -26,9 +26,9 @@ export const Route = createFileRoute("/courses")({
   component: CoursesPage,
 });
 
-const tracks = ["All", "TNPSC", "TET", "Police", "Test Batch"];
-
 function CoursesPage() {
+  const courses = useCourses();
+  const tracks = ["All", ...Array.from(new Set(courses.map((c) => c.track)))];
   const [track, setTrack] = useState("All");
   const list = track === "All" ? courses : courses.filter((c) => c.track === track);
 

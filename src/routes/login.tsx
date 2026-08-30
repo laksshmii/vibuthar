@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Phone } from "lucide-react";
-import { useAuth, isValidPhone } from "@/lib/auth";
+import { useAuth, isValidPhone, homeFor } from "@/lib/auth";
+import { verifyUserPassword } from "@/lib/directory";
 import { Eyebrow } from "@/components/section";
 
 export const Route = createFileRoute("/login")({
@@ -32,7 +33,7 @@ function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (user) navigate({ to: "/library", replace: true });
+    if (user) navigate({ to: homeFor(user), replace: true });
   }, [user, navigate]);
 
   function onSubmit(e: React.FormEvent) {
@@ -41,9 +42,13 @@ function LoginPage() {
       setError("Enter a 10-digit mobile number and a password of at least 4 characters.");
       return;
     }
+    if (!verifyUserPassword(phone, password)) {
+      setError("That password does not match this mobile number.");
+      return;
+    }
     setError("");
-    login(phone);
-    navigate({ to: "/library" });
+    const next = login(phone);
+    navigate({ to: homeFor(next) });
   }
 
   return (
@@ -81,7 +86,7 @@ function LoginPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full bg-transparent text-sm outline-none"
-              placeholder="98765 43210"
+              placeholder="Enter 10 digit mobile number"
             />
           </div>
 
@@ -120,7 +125,8 @@ function LoginPage() {
           </button>
 
           <p className="mt-5 text-center text-xs text-muted-foreground">
-            Demo access — any 10-digit mobile number and a 4+ character password will sign you in.
+            Demo access — any 10-digit mobile and a 4+ character password signs a student in.
+            Office number 82489 42219 opens the admin desk.
           </p>
         </form>
 

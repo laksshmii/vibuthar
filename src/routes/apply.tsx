@@ -2,10 +2,12 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Clock, Phone, User } from "lucide-react";
-import { courses } from "@/data/content";
+import { useCourses } from "@/lib/catalog";
+import { enrollUser, parsePrice, upsertUser } from "@/lib/directory";
 import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Eyebrow } from "@/components/section";
 import { useAuth, isValidPhone } from "@/lib/auth";
+import { saveApplication } from "@/lib/applications";
 
 type ApplySearch = { course: string };
 
@@ -35,6 +37,7 @@ function ApplyPage() {
   const { course: courseId } = Route.useSearch();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const courses = useCourses();
 
   const selected = courses.find((c) => c.id === courseId) ?? courses[0]!;
   const [name, setName] = useState(user?.name ?? "");
@@ -50,6 +53,14 @@ function ApplyPage() {
       return;
     }
     setError("");
+    saveApplication({
+      name: name.trim(),
+      phone,
+      courseId: selected.id,
+      attempt,
+    });
+    upsertUser({ name: name.trim(), phone, role: "student" });
+    enrollUser(phone, selected.id, parsePrice(selected.price));
     setSubmitted(true);
   }
 
@@ -91,47 +102,56 @@ function ApplyPage() {
   }
 
   return (
-    <div className="px-5 py-16 sm:px-8 sm:py-20">
-      <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[1fr_1.1fr]">
+    <div className="px-5 pt-8 pb-16 sm:px-8 sm:pt-10 sm:pb-20">
+      <div className="mx-auto max-w-5xl">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
           <Eyebrow>Application</Eyebrow>
-          <h1 className="mt-5 text-4xl sm:text-5xl">Apply to learn with us.</h1>
-          <p className="mt-4 max-w-md text-muted-foreground">
+          <h1 className="mt-5 max-w-xl text-4xl sm:text-5xl">Apply to learn with us.</h1>
+          <p className="mt-4 max-w-xl text-muted-foreground">
             Applications are reviewed by a mentor, not a form filter. Tell us where you are and we
             will suggest the right batch.
           </p>
-
-          <div className="mt-8 overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
-            <div className="aspect-16/10 w-full">
-              <CourseThumbnail course={selected} />
-            </div>
-            <div className="p-6">
-              <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                {selected.track}
-              </span>
-              <h2 className="mt-2 text-xl">{selected.title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{selected.blurb}</p>
-              <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" /> {selected.duration}
-                </span>
-                <span className="font-semibold text-chocolate">{selected.price}</span>
-              </div>
-            </div>
-          </div>
         </motion.div>
 
-        <motion.form
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          onSubmit={onSubmit}
-          className="h-fit rounded-3xl border border-border bg-card p-7 shadow-float"
-        >
+        <div className="mt-10 grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2 lg:gap-8">
+          <div className="flex min-h-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="flex w-full flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft"
+            >
+              <div className="aspect-16/10 w-full shrink-0">
+                <CourseThumbnail course={selected} />
+              </div>
+              <div className="flex flex-1 flex-col p-6">
+                <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                  {selected.track}
+                </span>
+                <h2 className="mt-2 text-xl">{selected.title}</h2>
+                <p className="mt-2 flex-1 text-sm text-muted-foreground">{selected.blurb}</p>
+                <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" /> {selected.duration}
+                  </span>
+                  <span className="font-semibold text-chocolate">{selected.price}</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="flex min-h-0">
+            <motion.form
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.05 }}
+              onSubmit={onSubmit}
+              className="flex w-full flex-1 flex-col rounded-3xl border border-border bg-card p-7 shadow-float"
+            >
           <label className="block text-sm font-medium" htmlFor="course">
             Programme
           </label>
@@ -177,7 +197,7 @@ function ApplyPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full bg-transparent text-sm outline-none"
-              placeholder="98765 43210"
+              placeholder="Enter 10 digit mobile number"
             />
           </div>
 
@@ -198,18 +218,21 @@ function ApplyPage() {
 
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-          <button
-            type="submit"
-            className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
-          >
-            Submit application
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </button>
-
-          <p className="mt-5 text-center text-xs text-muted-foreground">
-            No payment now. Fees are collected only after your mentor call.
-          </p>
-        </motion.form>
+          <div className="mt-auto pt-7">
+            <button
+              type="submit"
+              className="group flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+            >
+              Submit application
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </button>
+            <p className="mt-5 text-center text-xs text-muted-foreground">
+              No payment now. Fees are collected only after your mentor call.
+            </p>
+          </div>
+            </motion.form>
+          </div>
+        </div>
       </div>
     </div>
   );
