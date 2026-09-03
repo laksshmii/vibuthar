@@ -4,6 +4,8 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import tailwindcss from '@tailwindcss/vite';
 
+const apiProxyTarget = process.env["VITE_API_BASE_URL"] || "http://localhost:8080";
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
@@ -11,4 +13,12 @@ export default defineConfig({
     react(),
     tsconfigPaths(),
   ],
+  server: {
+    proxy: {
+      "/api": {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+    },
+  },
 });

@@ -3,7 +3,6 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Phone } from "lucide-react";
 import { useAuth, isValidPhone, homeFor } from "@/lib/auth";
-import { verifyUserPassword } from "@/lib/directory";
 import { Eyebrow } from "@/components/section";
 
 export const Route = createFileRoute("/login")({
@@ -31,24 +30,28 @@ function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (user) navigate({ to: homeFor(user), replace: true });
   }, [user, navigate]);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidPhone(phone) || password.length < 4) {
       setError("Enter a 10-digit mobile number and a password of at least 4 characters.");
       return;
     }
-    if (!verifyUserPassword(phone, password)) {
-      setError("That password does not match this mobile number.");
-      return;
-    }
     setError("");
-    const next = login(phone);
-    navigate({ to: homeFor(next) });
+    setPending(true);
+    try {
+      const next = await login(phone, password);
+      navigate({ to: homeFor(next) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in with these details.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -118,16 +121,12 @@ function LoginPage() {
 
           <button
             type="submit"
-            className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+            disabled={pending}
+            className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60"
           >
-            Enter the library
+            {pending ? "Signing in…" : "Enter the library"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button>
-
-          <p className="mt-5 text-center text-xs text-muted-foreground">
-            Demo access — any 10-digit mobile and a 4+ character password signs a student in.
-            Office number 82489 42219 opens the admin desk.
-          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

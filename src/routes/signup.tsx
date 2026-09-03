@@ -31,12 +31,13 @@ function SignupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (user) navigate({ to: homeFor(user), replace: true });
   }, [user, navigate]);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length < 2) {
       setError("Tell us your name so your mentor knows who to greet.");
@@ -47,8 +48,15 @@ function SignupPage() {
       return;
     }
     setError("");
-    const next = signup(name, phone, password);
-    navigate({ to: homeFor(next) });
+    setPending(true);
+    try {
+      await signup(name, phone, password);
+      navigate({ to: "/login" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create this account.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -129,20 +137,17 @@ function SignupPage() {
 
           <button
             type="submit"
-            className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+            disabled={pending}
+            className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60"
           >
             <span>
-              Create account
+              {pending ? "Creating account…" : "Create account"}
               <span className="block text-xs font-medium opacity-90 text-tamil">
                 கணக்கு தொடங்குக
               </span>
             </span>
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button>
-
-          <p className="mt-5 text-center text-xs text-muted-foreground">
-            Demo access — nothing is sent to a server.
-          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

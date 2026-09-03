@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { clearAuthToken, deviceInfo, loginAccount, registerAccount, writeAuthToken } from "@/lib/api";
 import { findUser, upsertUser } from "@/lib/directory";
 
 export type UserRole = "admin" | "student";
@@ -7,8 +8,8 @@ export type User = { name: string; phone: string; role: UserRole };
 type AuthValue = {
   user: User | null;
   ready: boolean;
-  login: (phone: string) => User;
-  signup: (name: string, phone: string, password?: string) => User;
+  login: (phone: string, password: string) => Promise<User>;
+  signup: (name: string, phone: string, password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -35,10 +36,11 @@ export function homeFor(user: User) {
   return user.role === "admin" ? "/admin" : "/library";
 }
 
-function toUser(name: string, phone: string): User {
+function toUser(name: string, phone: string, roleHint?: string): User {
   const normalized = normalizePhone(phone);
   const existing = findUser(normalized);
-  const admin = normalized === ADMIN_PHONE || existing?.role === "admin";
+  const remoteAdmin = roleHint?.toUpperCase() === "ADMIN";
+  const admin = normalized === ADMIN_PHONE || existing?.role === "admin" || remoteAdmin;
   return {
     name: existing?.name || (admin ? "Admin" : name.trim() || "Aspirant"),
     phone: normalized,
@@ -71,26 +73,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       ready,
-      login: (phone: string) => {
-        const previous = readStoredUser();
-        const normalized = normalizePhone(phone);
-        const keptName =
-          previous?.phone === normalized && previous.role !== "admin" ? previous.name : "Aspirant";
-        const next = toUser(keptName, normalized);
-        upsertUser(next);
+      login: async (phone: string, password: string) => {
+        const remote = await loginAccount({
+          identifier: normalizePhone(phone),
+          password,
+          deviceInfo: deviceInfo(),
+        });
+        const next = toUser(remote.name || "Aspirant", remote.phone || phone, remote.role);
+        upsertUser({ ...next, password });
+        writeAuthToken(remote.token);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         setUser(next);
         return next;
       },
-      signup: (name: string, phone: string, password?: string) => {
-        const next = toUser(name, phone);
+      signup: async (name: string, phone: string, password: string) => {
+        const remote = await registerAccount({
+          name: name.trim(),
+          phone: normalizePhone(phone),
+          password,
+        });
+        const next = toUser(remote.name || name, remote.phone || phone, remote.role);
         upsertUser({ ...next, password });
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        setUser(next);
-        return next;
       },
       logout: () => {
         window.localStorage.removeItem(STORAGE_KEY);
+        clearAuthToken();
         setUser(null);
       },
     }),
