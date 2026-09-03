@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/lib/auth";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { BookIntro } from "@/components/book-intro";
 
 function NotFoundComponent() {
   return (
@@ -105,13 +106,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootComponent() {
   return (
     <RootDocument>
-      <div className="flex min-h-screen flex-col">
-        <SiteHeader />
-        <main className="flex-1">
-          <Outlet />
-        </main>
-        <SiteFooter />
-      </div>
+      <BookIntro>
+        <div className="flex min-h-screen flex-col">
+          <SiteHeader />
+          <main className="flex-1">
+            <Outlet />
+          </main>
+          <SiteFooter />
+        </div>
+      </BookIntro>
     </RootDocument>
   );
 }
@@ -123,6 +126,12 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){var p=location.pathname;if(p==="/"||p==="")document.documentElement.classList.add("intro-lock")})();',
+          }}
+        />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         <QueryClientProvider client={queryClient}>
