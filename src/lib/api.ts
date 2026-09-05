@@ -176,13 +176,13 @@ function pickMember(raw: unknown): AdminMember | null {
   const id = studentId || pickString(user["id"], rec["id"], phone);
   const name = pickString(user["name"], user["fullName"], user["username"]) || "Aspirant";
   if (!id && !phone && name === "Aspirant") return null;
-  const roleRaw = pickString(user["role"]).toLowerCase();
+  const roleRaw = pickString(user["role"], rec["role"]).toUpperCase();
   return {
     id: id || phone || name,
     studentId: studentId || id || phone || name,
     name,
     phone: phone || "—",
-    role: roleRaw === "admin" ? "admin" : "student",
+    role: roleRaw || "STUDENT",
     createdAt: pickCreatedAt(user) || pickCreatedAt(rec),
     enrollments: pickEnrollments(user),
   };
@@ -278,7 +278,7 @@ export type AdminMember = {
   studentId: string;
   name: string;
   phone: string;
-  role: "admin" | "student";
+  role: string;
   createdAt: string;
   enrollments: AdminMemberEnrollment[];
 };
@@ -315,6 +315,7 @@ export type RegisterRequest = {
   name: string;
   phone: string;
   password: string;
+  role?: string;
 };
 
 export type LoginRequest = {
@@ -447,7 +448,16 @@ async function postAuth(path: string, payload: unknown, fallbackError: string) {
 }
 
 export async function registerAccount(payload: RegisterRequest) {
-  return postAuth("/api/auth/register", payload, "Could not create this account.");
+  return postAuth(
+    "/api/auth/register",
+    {
+      name: payload.name,
+      phone: payload.phone,
+      password: payload.password,
+      ...(payload.role ? { role: payload.role } : {}),
+    },
+    "Could not create this account.",
+  );
 }
 
 export async function loginAccount(payload: LoginRequest) {
@@ -520,5 +530,26 @@ export async function createAdminSubscription(input: CreateAdminSubscriptionInpu
       amount: input.amount,
     },
     "Could not add this subscription.",
+  );
+}
+
+export type CreateAdminCourseVideoInput = {
+  courseId: string;
+  title: string;
+  videoUrl: string;
+  sortOrder: number;
+  durationMinutes: number;
+};
+
+export async function createAdminCourseVideo(input: CreateAdminCourseVideoInput) {
+  return postJson(
+    `/api/admin/courses/${encodeURIComponent(input.courseId)}/videos`,
+    {
+      title: input.title,
+      videoUrl: input.videoUrl,
+      sortOrder: input.sortOrder,
+      durationMinutes: input.durationMinutes,
+    },
+    "Could not add this video.",
   );
 }

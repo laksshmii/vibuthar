@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
-import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, Plus, Users, X } from "lucide-react";
+import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, Plus, Users, Video, X } from "lucide-react";
 import { addCourse, useCourses } from "@/lib/catalog";
-import { addUser, formatPrice, useUsers, type UserRole } from "@/lib/directory";
-import { createAdminSubscription, listAdminMembers, type AdminMember, type MemberListKind } from "@/lib/api";
-import { homeFor, isValidPhone, useAuth } from "@/lib/auth";
+import { formatPrice, useUsers } from "@/lib/directory";
+import { createAdminCourseVideo, createAdminSubscription, listAdminMembers, registerAccount, type AdminCourse, type AdminMember, type MemberListKind } from "@/lib/api";
+import { homeFor, isValidPhone, normalizePhone, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const fieldClass =
@@ -354,8 +354,10 @@ function UserPanel() {
   const [subPending, setSubPending] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<UserRole>("student");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("STUDENT");
   const [error, setError] = useState("");
+  const [addPending, setAddPending] = useState(false);
 
   const loadMembers = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -392,7 +394,8 @@ function UserPanel() {
   function resetForm() {
     setName("");
     setPhone("");
-    setRole("student");
+    setPassword("");
+    setRole("STUDENT");
     setError("");
   }
 
@@ -450,7 +453,7 @@ function UserPanel() {
     }
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length < 2) {
       setError("Enter the student's name.");
@@ -460,15 +463,28 @@ function UserPanel() {
       setError("Enter a 10-digit mobile number.");
       return;
     }
+    if (password.length < 4) {
+      setError("Password must be at least 4 characters.");
+      return;
+    }
+    setError("");
+    setAddPending(true);
     try {
-      addUser({ name, phone, role });
+      await registerAccount({
+        name: name.trim(),
+        phone: normalizePhone(phone),
+        password,
+        role,
+      });
       resetForm();
       setOpen(false);
       setTab("non-subscribed");
       setPage(1);
-      void loadMembers();
+      await loadMembers({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add this user.");
+    } finally {
+      setAddPending(false);
     }
   }
 
@@ -639,22 +655,35 @@ function UserPanel() {
             />
           </label>
           <label className="block text-sm font-medium">
+            Password
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              autoComplete="new-password"
+              className={cn(fieldClass, "mt-2")}
+              placeholder="yahya@12345"
+            />
+          </label>
+          <label className="block text-sm font-medium">
             Role
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
+              onChange={(e) => setRole(e.target.value)}
               className={cn(fieldClass, "mt-2")}
             >
-              <option value="student">Student</option>
-              <option value="admin">Admin</option>
+              <option value="STUDENT">Student</option>
+              <option value="TRAINER">Trainer</option>
+              <option value="ADMIN">Admin</option>
             </select>
           </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <button
             type="submit"
-            className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold"
+            disabled={addPending}
+            className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold disabled:pointer-events-none disabled:opacity-60"
           >
-            Save user
+            {addPending ? "Saving…" : "Save user"}
           </button>
         </form>
       </AdminModal>
@@ -828,6 +857,13 @@ function CoursePanel() {
   const [status, setStatus] = useState("ACTIVE");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [error, setError] = useState("");
+  const [videoCourse, setVideoCourse] = useState<AdminCourse | null>(null);
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [sortOrder, setSortOrder] = useState("1");
+  const [durationMinutes, setDurationMinutes] = useState("");
+  const [videoError, setVideoError] = useState("");
+  const [videoPending, setVideoPending] = useState(false);
 
   function resetForm() {
     setTitle("");
@@ -837,6 +873,64 @@ function CoursePanel() {
     setStatus("ACTIVE");
     setThumbnailUrl("");
     setError("");
+  }
+
+  function resetVideoForm() {
+    setVideoTitle("");
+    setVideoUrl("");
+    setSortOrder("1");
+    setDurationMinutes("");
+    setVideoError("");
+  }
+
+  function openVideoModal(course: AdminCourse) {
+    resetVideoForm();
+    setVideoCourse(course);
+  }
+
+  function closeVideoModal() {
+    setVideoCourse(null);
+    resetVideoForm();
+    setVideoPending(false);
+  }
+
+  async function onAddVideo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!videoCourse) return;
+    if (videoTitle.trim().length < 2) {
+      setVideoError("Add a video title.");
+      return;
+    }
+    if (!videoUrl.trim()) {
+      setVideoError("Add a video URL.");
+      return;
+    }
+    const order = Number(sortOrder);
+    const minutes = Number(durationMinutes);
+    if (!Number.isFinite(order) || order < 1) {
+      setVideoError("Enter a sort order of 1 or more.");
+      return;
+    }
+    if (!Number.isFinite(minutes) || minutes < 1) {
+      setVideoError("Enter duration in minutes.");
+      return;
+    }
+    setVideoError("");
+    setVideoPending(true);
+    try {
+      await createAdminCourseVideo({
+        courseId: videoCourse.id,
+        title: videoTitle.trim(),
+        videoUrl: videoUrl.trim(),
+        sortOrder: order,
+        durationMinutes: minutes,
+      });
+      closeVideoModal();
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Could not add this video.");
+    } finally {
+      setVideoPending(false);
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -919,24 +1013,25 @@ function CoursePanel() {
               <th className="px-6 py-3 font-semibold">Status</th>
               <th className="px-6 py-3 font-semibold">Duration</th>
               <th className="px-6 py-3 font-semibold">Price</th>
+              <th className="px-6 py-3 font-semibold">Video</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
+                <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
                   Loading courses…
                 </td>
               </tr>
             ) : loadError ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-destructive">
+                <td colSpan={6} className="px-6 py-10 text-center text-destructive">
                   {loadError}
                 </td>
               </tr>
             ) : slice.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
+                <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
                   No courses yet.
                 </td>
               </tr>
@@ -969,6 +1064,15 @@ function CoursePanel() {
                     {course.durationHours ? `${course.durationHours} hours` : "—"}
                   </td>
                   <td className="px-6 py-4 font-semibold">{formatPrice(course.price)}</td>
+                  <td className="px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={() => openVideoModal(course)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-chocolate transition-colors hover:bg-secondary"
+                    >
+                      <Video className="h-3.5 w-3.5" /> Add video
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -1071,6 +1175,65 @@ function CoursePanel() {
             {pending ? "Saving…" : "Save course"}
           </button>
         </form>
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(videoCourse)}
+        title={videoCourse ? `Add video — ${videoCourse.title}` : "Add video"}
+        onClose={closeVideoModal}
+      >
+        {videoCourse && (
+          <form onSubmit={onAddVideo} className="grid gap-4">
+            <label className="block text-sm font-medium">
+              Title
+              <input
+                value={videoTitle}
+                onChange={(e) => setVideoTitle(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+                placeholder="Lesson 1 - Getting Started"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Video URL
+              <input
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+                placeholder="https://youtu.be/dQw4w9WgXcQ"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Sort order
+              <input
+                type="number"
+                min={1}
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+                placeholder="1"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Duration (minutes)
+              <input
+                type="number"
+                min={1}
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+                placeholder="30"
+              />
+            </label>
+            {videoError && <p className="text-sm text-destructive">{videoError}</p>}
+            <button
+              type="submit"
+              disabled={videoPending}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold disabled:pointer-events-none disabled:opacity-60"
+            >
+              {videoPending ? "Saving…" : "Save video"}
+            </button>
+          </form>
+        )}
       </AdminModal>
     </section>
   );
