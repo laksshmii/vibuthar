@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
-import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, Plus, Users, Video, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Image as ImageIcon, BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, ImagePlus, Plus, Trash2, Users, Video, X } from "lucide-react";
+import { BANNER_IMAGE, assertBannerFile } from "@/lib/banner-image";
 import { addCourse, useCourses } from "@/lib/catalog";
 import { formatPrice, useUsers } from "@/lib/directory";
-import { createAdminCourseVideo, createAdminSubscription, listAdminMembers, registerAccount, type AdminCourse, type AdminMember, type MemberListKind } from "@/lib/api";
+import { createAdminCourseVideo, createAdminSubscription, deleteAdminImage, listAdminMembers, listPublicImages, registerAccount, updateAdminImage, uploadAdminImage, type AdminCourse, type AdminImage, type AdminMember, type MemberListKind } from "@/lib/api";
 import { homeFor, isValidPhone, normalizePhone, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -122,12 +123,13 @@ function AdminPage() {
   return <AdminDesk />;
 }
 
-type AdminSection = "analytics" | "users" | "courses";
+type AdminSection = "analytics" | "users" | "courses" | "banners";
 
 const sidebar = [
   { id: "analytics" as const, label: "Analytics", icon: BarChart3 },
   { id: "users" as const, label: "User list", icon: Users },
   { id: "courses" as const, label: "Course list", icon: BookOpen },
+  { id: "banners" as const, label: "Banner image", icon: ImageIcon },
 ];
 
 function AdminDesk() {
@@ -167,8 +169,10 @@ function AdminDesk() {
           <AnalyticsPanel />
         ) : section === "users" ? (
           <UserPanel />
-        ) : (
+        ) : section === "courses" ? (
           <CoursePanel />
+        ) : (
+          <BannerPanel />
         )}
       </div>
     </div>
@@ -1234,6 +1238,264 @@ function CoursePanel() {
             </button>
           </form>
         )}
+      </AdminModal>
+    </section>
+  );
+}
+
+function BannerPanel() {
+  const [images, setImages] = useState<AdminImage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const { page, setPage, pageCount, slice, from, to, total } = usePaged(images);
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [error, setError] = useState("");
+  const [replaceId, setReplaceId] = useState<string | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  const loadImages = useCallback(async () => {
+    setLoading(true);
+    try {
+      setImages(await listPublicImages());
+      setLoadError("");
+    } catch (err) {
+      setImages([]);
+      setLoadError(err instanceof Error ? err.message : "Could not load images.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadImages();
+  }, [loadImages]);
+
+  function resetForm() {
+    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setPreviewUrl("");
+    setError("");
+  }
+
+  async function pickValidatedFile(next: File | undefined) {
+    if (!next) return null;
+    const valid = await assertBannerFile(next);
+    return valid;
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) {
+      setError(
+        `Upload a ${BANNER_IMAGE.width}×${BANNER_IMAGE.height} image — the same size as the home carousel photos.`,
+      );
+      return;
+    }
+    setError("");
+    setPending(true);
+    try {
+      await uploadAdminImage(file);
+      resetForm();
+      setOpen(false);
+      await loadImages();
+      setPage(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload this image.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onReplaceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const next = e.target.files?.[0];
+    e.target.value = "";
+    const imageId = replaceId;
+    setReplaceId(null);
+    if (!next || !imageId) return;
+    try {
+      const valid = await pickValidatedFile(next);
+      if (!valid) return;
+      await updateAdminImage(imageId, valid);
+      await loadImages();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not replace this image.");
+    }
+  }
+
+  async function onDelete(imageId: string) {
+    try {
+      await deleteAdminImage(imageId);
+      await loadImages();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not delete this image.");
+    }
+  }
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
+        <div>
+          <h2 className="text-xl">Banner image</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {loading ? "Loading images…" : `${images.length} images`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
+          className="inline-flex items-center gap-2 rounded-full bg-gold-gradient px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-gold"
+        >
+          <Plus className="h-4 w-4" /> Add banner
+        </button>
+      </div>
+
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => void onReplaceFile(e)}
+      />
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] text-left text-sm">
+          <thead className="border-b border-border bg-secondary/60 text-xs tracking-[0.12em] text-muted-foreground uppercase">
+            <tr>
+              <th className="px-6 py-3 font-semibold">Image</th>
+              <th className="px-6 py-3 font-semibold">Name</th>
+              <th className="px-6 py-3 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {loading ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-10 text-center text-muted-foreground">
+                  Loading images…
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-10 text-center text-destructive">
+                  {loadError}
+                </td>
+              </tr>
+            ) : slice.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-10 text-center text-muted-foreground">
+                  No images yet.
+                </td>
+              </tr>
+            ) : (
+              slice.map((image) => (
+                <tr key={image.id} className="hover:bg-secondary/40">
+                  <td className="px-6 py-4">
+                    {image.url ? (
+                      <img src={image.url} alt="" className="h-10 w-16 rounded-md object-cover" />
+                    ) : (
+                      <div className="h-10 w-16 rounded-md bg-secondary" />
+                    )}
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-chocolate">{image.title}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplaceId(image.id);
+                          replaceInputRef.current?.click();
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-chocolate transition-colors hover:bg-secondary"
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDelete(image.id)}
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-secondary"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePager
+        page={page}
+        pageCount={pageCount}
+        from={from}
+        to={to}
+        total={total}
+        onPage={setPage}
+      />
+
+      <AdminModal
+        open={open}
+        title="Add banner"
+        onClose={() => {
+          resetForm();
+          setOpen(false);
+        }}
+      >
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <div>
+            <p className="text-sm font-medium">Banner image</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Must be {BANNER_IMAGE.width}×{BANNER_IMAGE.height} px — the same size as the home
+              carousel photos (hero.jpg). JPG, PNG or WebP, under 2.5 MB.
+            </p>
+            <label className="mt-3 flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-dashed border-border bg-background">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={async (e) => {
+                  const next = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!next) return;
+                  try {
+                    const valid = await pickValidatedFile(next);
+                    if (!valid) return;
+                    if (previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+                    setFile(valid);
+                    setPreviewUrl(URL.createObjectURL(valid));
+                    setError("");
+                  } catch (err) {
+                    setFile(null);
+                    setPreviewUrl("");
+                    setError(err instanceof Error ? err.message : "This image cannot be used.");
+                  }
+                }}
+                className="sr-only"
+              />
+              {previewUrl ? (
+                <img src={previewUrl} alt="" className="aspect-[20/9] w-full object-cover" />
+              ) : (
+                <span className="flex aspect-[20/9] w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <ImagePlus className="h-6 w-6" />
+                  Upload {BANNER_IMAGE.width}×{BANNER_IMAGE.height} banner
+                </span>
+              )}
+            </label>
+            {file ? <p className="mt-2 text-xs text-muted-foreground">{file.name}</p> : null}
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <button
+            type="submit"
+            disabled={pending}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold disabled:pointer-events-none disabled:opacity-60"
+          >
+            {pending ? "Uploading…" : "Save banner"}
+          </button>
+        </form>
       </AdminModal>
     </section>
   );

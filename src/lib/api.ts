@@ -52,7 +52,7 @@ function asArray(value: unknown): unknown[] {
   const data = asRecord(rec["data"]);
   if (Array.isArray(data?.["items"])) return data["items"] as unknown[];
   if (Array.isArray(rec["items"])) return rec["items"] as unknown[];
-  for (const key of ["data", "content", "members", "users", "items", "results", "list", "courses"]) {
+  for (const key of ["data", "content", "members", "users", "items", "results", "list", "courses", "banners", "images"]) {
     const item = rec[key];
     if (Array.isArray(item)) return item;
     const nested = asRecord(item);
@@ -70,6 +70,8 @@ function asArray(value: unknown): unknown[] {
       "subscribedMembers",
       "nonSubscribedMembers",
       "courses",
+      "banners",
+      "images",
     ]) {
       if (Array.isArray(nested[inner])) return nested[inner] as unknown[];
     }
@@ -231,6 +233,71 @@ function pickCourses(body: unknown): AdminCourse[] {
     .filter((course): course is AdminCourse => Boolean(course));
 }
 
+function pickBanner(raw: unknown): AdminBanner | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const banner = asRecord(rec["banner"]) ?? rec;
+  const title = pickString(banner["title"], banner["name"]);
+  const imageUrl = pickString(
+    banner["imageUrl"],
+    banner["image_url"],
+    banner["url"],
+    banner["image"],
+    banner["thumbnailUrl"],
+  );
+  const id = pickString(banner["id"], rec["id"], banner["bannerId"], title, imageUrl);
+  if (!id && !imageUrl) return null;
+  return {
+    id: id || imageUrl,
+    title: title || "Banner",
+    imageUrl,
+    status: pickString(banner["status"]) || "ACTIVE",
+  };
+}
+
+function mediaUrl(path: string) {
+  if (!path) return "";
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  const base = apiBaseUrl();
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return base ? `${base}${normalized}` : normalized;
+}
+
+function pickImage(raw: unknown): AdminImage | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const image = asRecord(rec["image"]) ?? rec;
+  const url = mediaUrl(
+    pickString(
+      image["url"],
+      image["imageUrl"],
+      image["image_url"],
+      image["path"],
+      image["fileUrl"],
+      image["src"],
+    ),
+  );
+  const id = pickString(image["imageId"], rec["imageId"], image["id"], rec["id"], url);
+  if (!id && !url) return null;
+  return {
+    id: id || url,
+    url,
+    title: pickString(image["title"], image["name"], image["originalName"], image["filename"], image["fileName"]) || "Image",
+  };
+}
+
+function pickImages(body: unknown): AdminImage[] {
+  return asArray(body)
+    .map(pickImage)
+    .filter((image): image is AdminImage => Boolean(image));
+}
+
+function pickBanners(body: unknown): AdminBanner[] {
+  return asArray(body)
+    .map(pickBanner)
+    .filter((banner): banner is AdminBanner => Boolean(banner));
+}
+
 function authHeaders(): HeadersInit {
   const token = typeof window === "undefined" ? null : readAuthToken();
   return {
@@ -250,6 +317,22 @@ async function request(path: string, init: RequestInit, fallbackError: string) {
     throw new ApiError(errorMessage(body, fallbackError), res.status);
   }
   return body;
+}
+
+async function sendFile(path: string, method: "POST" | "PUT", file: File, fallbackError: string) {
+  const form = new FormData();
+  form.append("file", file, file.name);
+
+  const token = typeof window === "undefined" ? null : readAuthToken();
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(apiUrl(path), { method, cache: "no-store", headers, body: form });
+  const payload = await readBody(res);
+  if (!res.ok) {
+    throw new ApiError(errorMessage(payload, fallbackError), res.status);
+  }
+  return payload;
 }
 
 async function postJson(path: string, payload: unknown, fallbackError: string) {
@@ -291,6 +374,19 @@ export type AdminCourse = {
   price: number;
   status: string;
   thumbnailUrl: string;
+};
+
+export type AdminBanner = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  status: string;
+};
+
+export type AdminImage = {
+  id: string;
+  url: string;
+  title: string;
 };
 
 export type CreateAdminCourseInput = {
@@ -551,5 +647,74 @@ export async function createAdminCourseVideo(input: CreateAdminCourseVideoInput)
       durationMinutes: input.durationMinutes,
     },
     "Could not add this video.",
+  );
+}
+
+export async function listAdminBanners() {
+  const body = await request("/api/admin/banners", { method: "GET" }, "Could not load banners.");
+  return pickBanners(body);
+}
+
+export async function createAdminBanner(input: { title: string; imageUrl: string; status: string }) {
+  const body = await postJson(
+    "/api/admin/banners",
+    {
+      title: input.title,
+      imageUrl: input.imageUrl,
+      status: input.status,
+    },
+    "Could not add this banner.",
+  );
+  const rec = asRecord(body);
+  const nested = rec ? (asRecord(rec["data"]) ?? rec) : body;
+  return (
+    pickBanner(nested) ??
+    pickBanners(body)[0] ?? {
+      id: pickString(asRecord(nested)?.["id"], input.title) || input.title,
+      title: input.title,
+      imageUrl: input.imageUrl,
+      status: input.status,
+    }
+  );
+}
+
+function imageFromUpload(body: unknown, file: File): AdminImage {
+  const rec = asRecord(body);
+  const nested = rec ? (asRecord(rec["data"]) ?? rec) : body;
+  return (
+    pickImage(nested) ??
+    pickImages(body)[0] ?? {
+      id: pickString(asRecord(nested)?.["id"], asRecord(nested)?.["imageId"], file.name) || file.name,
+      url: "",
+      title: file.name,
+    }
+  );
+}
+
+export async function listPublicImages() {
+  const body = await request("/api/images", { method: "GET" }, "Could not load images.");
+  return pickImages(body);
+}
+
+export async function uploadAdminImage(file: File) {
+  const body = await sendFile("/api/admin/images", "POST", file, "Could not upload this image.");
+  return imageFromUpload(body, file);
+}
+
+export async function updateAdminImage(imageId: string, file: File) {
+  const body = await sendFile(
+    `/api/admin/images/${encodeURIComponent(imageId)}`,
+    "PUT",
+    file,
+    "Could not replace this image.",
+  );
+  return imageFromUpload(body, file);
+}
+
+export async function deleteAdminImage(imageId: string) {
+  await request(
+    `/api/admin/images/${encodeURIComponent(imageId)}`,
+    { method: "DELETE" },
+    "Could not delete this image.",
   );
 }

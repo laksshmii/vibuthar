@@ -12,10 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import heroImage from "@/assets/hero.jpg";
-import heroClassroomImage from "@/assets/hero-classroom.jpg";
-import heroReviewImage from "@/assets/hero-answer-review.jpg";
 import { useCourses } from "@/lib/catalog";
+import { useHeroSlides } from "@/lib/hero-slides";
 import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Reveal, Eyebrow } from "@/components/section";
 import {
@@ -50,44 +48,9 @@ const badges = [
   { icon: Sparkles, label: "Answer clinics", sub: "every week", className: "bottom-16 left-4 sm:bottom-20 sm:left-16" },
 ];
 
-const heroSlides = [
-  {
-    id: 1,
-    src: heroClassroomImage,
-    tag: "Batch 2027 · Now open",
-    title: "The quiet craft of becoming a civil servant.",
-    titleTa: "அரசுப் பணிக்கான பயணம், அமைதியான பயிற்சியுடன்.",
-    description:
-      "Vibuthar pairs each aspirant with a mentor, a syllabus map and a filmed classroom you can return to at 5 a.m. or midnight.",
-    descriptionTa:
-      "ஒவ்வொரு மாணவருக்கும் ஒரு வழிகாட்டி, பாடத்திட்ட வரைபடம், மற்றும் விடியற்காலையிலும் நள்ளிரவிலும் பார்க்கக்கூடிய பதிவு வகுப்புகள்.",
-  },
-  {
-    id: 2,
-    src: heroReviewImage,
-    tag: "1:1 Mentorship",
-    title: "Personalized reviews for every answer script.",
-    titleTa: "ஒவ்வொரு விடைத்தாளுக்கும் தனிப்பட்ட மதிப்பீடு.",
-    description:
-      "Get targeted feedback on your mains writing strategy within 48 hours from experienced faculty.",
-    descriptionTa:
-      "உங்கள் விடை எழுதும் முறைக்கு 48 மணி நேரத்திற்குள் அனுபவம் மிக்க ஆசிரியர்களின் திருத்தமும் ஆலோசனையும்.",
-  },
-  {
-    id: 3,
-    src: heroImage,
-    tag: "On-Demand Library",
-    title: "Cinematic study sessions on your schedule.",
-    titleTa: "உங்கள் நேரத்திற்கு ஏற்ற வகுப்புகள்.",
-    description:
-      "Over 1,240+ HD filmed lectures available 24/7 with comprehensive syllabus coverage.",
-    descriptionTa:
-      "1,240-க்கும் மேற்பட்ட தரமான பதிவு வகுப்புகள், நாள் முழுவதும் கிடைக்கும் — முழுப் பாடத்திட்ட விளக்கத்துடன்.",
-  },
-] as const;
-
 function Landing() {
   const { courses } = useCourses();
+  const heroSlides = useHeroSlides();
   const heroRef = useRef<HTMLDivElement>(null);
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
@@ -118,7 +81,7 @@ function Landing() {
     return () => clearInterval(timer);
   }, [api]);
 
-  const activeSlide = heroSlides[current] ?? heroSlides[0];
+  const activeSlide = heroSlides[current] ?? heroSlides[0]!;
 
   return (
     <div>
@@ -137,7 +100,12 @@ function Landing() {
               className="absolute inset-0 h-full w-full"
               style={{ y: imageY, scale: imageScale }}
             >
-              <Carousel setApi={setApi} opts={{ loop: true, watchDrag: true }} className="h-full w-full">
+              <Carousel
+                key={heroSlides.map((slide) => slide.id).join("|")}
+                setApi={setApi}
+                opts={{ loop: true, watchDrag: true }}
+                className="h-full w-full"
+              >
                 <CarouselContent className="ml-0 h-full">
                   {heroSlides.map((slide, index) => (
                     <CarouselItem key={slide.id} className="relative h-full basis-full pl-0">
