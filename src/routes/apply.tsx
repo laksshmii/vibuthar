@@ -37,9 +37,9 @@ function ApplyPage() {
   const { course: courseId } = Route.useSearch();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const courses = useCourses();
+  const { courses, loading, error: loadError } = useCourses();
 
-  const selected = courses.find((c) => c.id === courseId) ?? courses[0]!;
+  const selected = courses.find((c) => c.id === courseId) ?? courses[0];
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [attempt, setAttempt] = useState("First attempt");
@@ -48,6 +48,10 @@ function ApplyPage() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!selected) {
+      setError("Choose a programme first.");
+      return;
+    }
     if (name.trim().length < 2 || !isValidPhone(phone)) {
       setError("Add your name and a 10-digit mobile number.");
       return;
@@ -79,7 +83,7 @@ function ApplyPage() {
           <h1 className="mt-6 text-3xl">Application received.</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             Thank you, {name.split(" ")[0]}. A mentor will call you about{" "}
-            <span className="font-semibold text-chocolate">{selected.title}</span> within two working
+            <span className="font-semibold text-chocolate">{selected?.title}</span> within two working
             days.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
@@ -118,6 +122,14 @@ function ApplyPage() {
         </motion.div>
 
         <div className="mt-10 grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2 lg:gap-8">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading programmes…</p>
+          ) : loadError ? (
+            <p className="text-sm text-destructive">{loadError}</p>
+          ) : !selected ? (
+            <p className="text-sm text-muted-foreground">No programmes are listed yet.</p>
+          ) : (
+          <>
           <div className="flex min-h-0">
             <motion.div
               initial={{ opacity: 0 }}
@@ -232,6 +244,8 @@ function ApplyPage() {
           </div>
             </motion.form>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

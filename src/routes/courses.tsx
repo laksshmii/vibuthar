@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { ArrowRight, Clock, PlayCircle } from "lucide-react";
+import { ArrowRight, Clock } from "lucide-react";
 import { useCourses } from "@/lib/catalog";
 import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Reveal, Eyebrow } from "@/components/section";
@@ -27,8 +27,8 @@ export const Route = createFileRoute("/courses")({
 });
 
 function CoursesPage() {
-  const courses = useCourses();
-  const tracks = ["All", ...Array.from(new Set(courses.map((c) => c.track)))];
+  const { courses, loading, error } = useCourses();
+  const tracks = ["All", ...Array.from(new Set(courses.map((c) => c.track).filter(Boolean)))];
   const [track, setTrack] = useState("All");
   const list = track === "All" ? courses : courses.filter((c) => c.track === track);
 
@@ -50,23 +50,32 @@ function CoursesPage() {
           </p>
         </Reveal>
 
-        <Reveal delay={0.1} className="mt-10 flex flex-wrap gap-2">
-          {tracks.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTrack(t)}
-              className={cn(
-                "rounded-full border px-5 py-2.5 text-sm font-medium transition-all",
-                track === t
-                  ? "border-transparent bg-gold-gradient text-primary-foreground shadow-gold"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </Reveal>
+        {tracks.length > 2 ? (
+          <Reveal delay={0.1} className="mt-10 flex flex-wrap gap-2">
+            {tracks.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTrack(t)}
+                className={cn(
+                  "rounded-full border px-5 py-2.5 text-sm font-medium transition-all",
+                  track === t
+                    ? "border-transparent bg-gold-gradient text-primary-foreground shadow-gold"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </Reveal>
+        ) : null}
 
+        {loading ? (
+          <p className="mt-10 text-sm text-muted-foreground">Loading programmes…</p>
+        ) : error ? (
+          <p className="mt-10 text-sm text-destructive">{error}</p>
+        ) : list.length === 0 ? (
+          <p className="mt-10 text-sm text-muted-foreground">No programmes are listed yet.</p>
+        ) : (
         <motion.div layout className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((course, i) => (
             <motion.article
@@ -86,19 +95,10 @@ function CoursesPage() {
               </div>
               <div className="flex flex-1 flex-col p-6">
                 <h2 className="text-xl">{course.title}</h2>
-                <p className="mt-1 text-sm font-semibold text-chocolate text-tamil">
-                  {course.titleTa}
-                </p>
-                <p className="mt-3 text-sm text-muted-foreground">{course.blurb}</p>
-                <p className="mt-2 flex-1 text-sm text-muted-foreground text-tamil">
-                  {course.blurbTa}
-                </p>
+                <p className="mt-3 flex-1 text-sm text-muted-foreground">{course.blurb}</p>
                 <div className="mt-5 flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <Clock className="h-4 w-4" /> {course.duration}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <PlayCircle className="h-4 w-4" /> {course.lessons} lessons
                   </span>
                 </div>
                 <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
@@ -115,6 +115,7 @@ function CoursesPage() {
             </motion.article>
           ))}
         </motion.div>
+        )}
       </div>
     </div>
   );

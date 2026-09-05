@@ -1,9 +1,22 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { clearAuthToken, deviceInfo, loginAccount, registerAccount, writeAuthToken } from "@/lib/api";
+import {
+  clearAuthToken,
+  deviceInfo,
+  loginAccount,
+  registerAccount,
+  writeAuthToken,
+  type SubscribedCourse,
+} from "@/lib/api";
 import { findUser, upsertUser } from "@/lib/directory";
 
 export type UserRole = "admin" | "student";
-export type User = { name: string; phone: string; role: UserRole };
+export type User = {
+  name: string;
+  phone: string;
+  role: UserRole;
+  userId?: string;
+  subscribedCourses: SubscribedCourse[];
+};
 
 type AuthValue = {
   user: User | null;
@@ -36,7 +49,12 @@ export function homeFor(user: User) {
   return user.role === "admin" ? "/admin" : "/library";
 }
 
-function toUser(name: string, phone: string, roleHint?: string): User {
+function toUser(
+  name: string,
+  phone: string,
+  roleHint?: string,
+  extra?: { userId?: string; subscribedCourses?: SubscribedCourse[] },
+): User {
   const normalized = normalizePhone(phone);
   const existing = findUser(normalized);
   const remoteAdmin = roleHint?.toUpperCase() === "ADMIN";
@@ -45,6 +63,8 @@ function toUser(name: string, phone: string, roleHint?: string): User {
     name: existing?.name || (admin ? "Admin" : name.trim() || "Aspirant"),
     phone: normalized,
     role: admin ? "admin" : "student",
+    userId: extra?.userId,
+    subscribedCourses: extra?.subscribedCourses ?? [],
   };
 }
 
@@ -52,9 +72,18 @@ function readStoredUser(): User | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { name?: string; phone?: string };
+    const parsed = JSON.parse(raw) as {
+      name?: string;
+      phone?: string;
+      role?: string;
+      userId?: string;
+      subscribedCourses?: SubscribedCourse[];
+    };
     if (!parsed.phone) return null;
-    return toUser(parsed.name ?? "Aspirant", parsed.phone);
+    return toUser(parsed.name ?? "Aspirant", parsed.phone, parsed.role, {
+      userId: parsed.userId,
+      subscribedCourses: Array.isArray(parsed.subscribedCourses) ? parsed.subscribedCourses : [],
+    });
   } catch {
     return null;
   }
@@ -79,7 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           password,
           deviceInfo: deviceInfo(),
         });
-        const next = toUser(remote.name || "Aspirant", remote.phone || phone, remote.role);
+        const next = toUser(remote.name || "Aspirant", remote.phone || phone, remote.role, {
+          userId: remote.userId,
+          subscribedCourses: remote.subscribedCourses,
+        });
         upsertUser({ ...next, password });
         writeAuthToken(remote.token);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

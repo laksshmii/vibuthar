@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { Lock, Play, Search, LayoutGrid, X, Youtube } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type User } from "@/lib/auth";
 import { useCourses } from "@/lib/catalog";
 import {
   videos,
@@ -38,7 +38,7 @@ function LibraryPage() {
 
   if (!ready) return <div className="min-h-[60vh]" />;
   if (!user) return <LockedState />;
-  return <Library name={user.name} />;
+  return <Library user={user} />;
 }
 
 function LockedState() {
@@ -70,11 +70,16 @@ function LockedState() {
 
 const ALL = "all";
 
-function Library({ name }: { name: string }) {
-  const courses = useCourses();
+function Library({ user }: { user: User }) {
+  const { courses } = useCourses();
+  const subscribed = user.subscribedCourses ?? [];
   const tabs = [
     { id: ALL, label: "All lectures", labelTa: "அனைத்து வகுப்புகள்" },
-    ...courses.map((c) => ({ id: c.id, label: c.shortTitle, labelTa: c.titleTa })),
+    ...subscribed.map((course) => ({
+      id: course.courseId,
+      label: course.title,
+      labelTa: "",
+    })),
   ];
   const countFor = (tabId: string) =>
     tabId === ALL ? videos.length : videos.filter((v) => v.courseId === tabId).length;
@@ -99,9 +104,11 @@ function Library({ name }: { name: string }) {
           className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
         >
           <div>
-            <p className="text-sm text-muted-foreground">Welcome back, {name}</p>
+            <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
             <h1 className="mt-1 text-3xl sm:text-4xl">{activeTab.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground text-tamil">{activeTab.labelTa}</p>
+            {activeTab.labelTa ? (
+              <p className="mt-1 text-sm text-muted-foreground text-tamil">{activeTab.labelTa}</p>
+            ) : null}
           </div>
           <a
             href={youtubeChannelUrl}
@@ -190,7 +197,8 @@ function Library({ name }: { name: string }) {
                 </button>
                 <div className="flex flex-1 flex-col p-5">
                   <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                    {courses.find((c) => c.id === video.courseId)?.shortTitle}
+                    {subscribed.find((c) => c.courseId === video.courseId)?.title ??
+                      courses.find((c) => c.id === video.courseId)?.shortTitle}
                   </span>
                   <h2 className="mt-2 flex-1 text-base leading-snug font-semibold">{video.title}</h2>
                   <button

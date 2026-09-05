@@ -87,7 +87,7 @@ const heroSlides = [
 ] as const;
 
 function Landing() {
-  const courses = useCourses();
+  const { courses } = useCourses();
   const heroRef = useRef<HTMLDivElement>(null);
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);

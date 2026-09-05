@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { ArrowRight, Lock, Phone } from "lucide-react";
 import { isValidPhone, normalizePhone } from "@/lib/auth";
-import { findUser, setUserPassword } from "@/lib/directory";
+import { forgotPassword, resetPassword } from "@/lib/api";
 import { Eyebrow } from "@/components/section";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -31,22 +31,27 @@ function ForgotPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  function onPhoneSubmit(e: React.FormEvent) {
+  async function onPhoneSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidPhone(phone)) {
       setError("Enter the 10-digit mobile number on your account.");
       return;
     }
-    if (!findUser(phone)) {
-      setError("No account found for this mobile number.");
-      return;
-    }
     setError("");
-    setStep("password");
+    setPending(true);
+    try {
+      await forgotPassword(normalizePhone(phone));
+      setStep("password");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start password reset.");
+    } finally {
+      setPending(false);
+    }
   }
 
-  function onPasswordSubmit(e: React.FormEvent) {
+  async function onPasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 4) {
       setError("New password must be at least 4 characters.");
@@ -56,12 +61,15 @@ function ForgotPasswordPage() {
       setError("New password and confirmation do not match.");
       return;
     }
+    setError("");
+    setPending(true);
     try {
-      setUserPassword(phone, password);
-      setError("");
+      await resetPassword(normalizePhone(phone), password);
       navigate({ to: "/login" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset this password.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -111,9 +119,10 @@ function ForgotPasswordPage() {
 
             <button
               type="submit"
-              className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+              disabled={pending}
+              className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60"
             >
-              Continue
+              {pending ? "Checking…" : "Continue"}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
           </form>
@@ -158,9 +167,10 @@ function ForgotPasswordPage() {
 
             <button
               type="submit"
-              className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5"
+              disabled={pending}
+              className="group mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-gold-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-gold transition-transform hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60"
             >
-              Submit
+              {pending ? "Saving…" : "Submit"}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
 

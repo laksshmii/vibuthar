@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, ImagePlus, Plus, Users, X } from "lucide-react";
-import { addCourse, COURSE_THUMB, readCourseThumbnail, useCourses } from "@/lib/catalog";
-import { addUser, formatPrice, useUsers, type DirectoryUser, type UserRole } from "@/lib/directory";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Eye, Plus, Users, X } from "lucide-react";
+import { addCourse, useCourses } from "@/lib/catalog";
+import { addUser, formatPrice, useUsers, type UserRole } from "@/lib/directory";
+import { createAdminSubscription, listAdminMembers, type AdminMember, type MemberListKind } from "@/lib/api";
 import { homeFor, isValidPhone, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -237,7 +238,7 @@ function AdminModal({
 
 function AnalyticsPanel() {
   const users = useUsers();
-  const courses = useCourses();
+  const { courses } = useCourses({ includeInactive: true });
   const students = users.filter((u) => u.role === "student");
   const allPaid = students.reduce(
     (sum, user) => sum + user.enrollments.reduce((n, e) => n + e.paid, 0),
@@ -307,22 +308,146 @@ function AnalyticsPanel() {
   );
 }
 
+function formatMemberDate(value: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function toExpiresAt(value: string) {
+  if (!value) return "";
+  return value.length === 16 ? `${value}:59` : value;
+}
+
+function memberCoursesLabel(user: AdminMember) {
+  const titles = user.enrollments.map((row) => row.title).filter(Boolean);
+  return titles.length ? titles.join(", ") : "—";
+}
+
 function UserPanel() {
-  const users = useUsers();
-  const { page, setPage, pageCount, slice, from, to, total } = usePaged(users);
-  const courses = useCourses();
+  const [tab, setTab] = useState<MemberListKind>("subscribed");
+  const [subscribed, setSubscribed] = useState<AdminMember[]>([]);
+  const [unsubscribed, setUnsubscribed] = useState<AdminMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const members = tab === "subscribed" ? subscribed : unsubscribed;
+  const { page, setPage, pageCount, slice, from, to, total } = usePaged(members);
+  const { courses, raw: adminCourses } = useCourses({ includeInactive: true });
+  const assignableCourses = adminCourses.filter((course) => {
+    const status = course.status.trim().toUpperCase();
+    return !status || status === "ACTIVE";
+  });
   const [open, setOpen] = useState(false);
-  const [viewing, setViewing] = useState<DirectoryUser | null>(null);
+  const [viewing, setViewing] = useState<AdminMember | null>(null);
+  const [subscribing, setSubscribing] = useState<AdminMember | null>(null);
+  const [courseId, setCourseId] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [paymentType, setPaymentType] = useState<"UPI" | "CASH">("CASH");
+  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "NOT_PAID" | "PARTIAL">("NOT_PAID");
+  const [amount, setAmount] = useState("");
+  const [subError, setSubError] = useState("");
+  const [subPending, setSubPending] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<UserRole>("student");
   const [error, setError] = useState("");
+
+  const loadMembers = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+      setLoadError("");
+    }
+    try {
+      const [nextSubscribed, nextUnsubscribed] = await Promise.all([
+        listAdminMembers("subscribed"),
+        listAdminMembers("non-subscribed"),
+      ]);
+      setSubscribed(nextSubscribed);
+      setUnsubscribed(nextUnsubscribed);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load members.");
+      if (!opts?.silent) {
+        setSubscribed([]);
+        setUnsubscribed([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, setPage]);
 
   function resetForm() {
     setName("");
     setPhone("");
     setRole("student");
     setError("");
+  }
+
+  function openSubscribe(user: AdminMember) {
+    const firstCourse = assignableCourses[0];
+    setSubscribing(user);
+    setCourseId(firstCourse?.id ?? "");
+    setExpiresAt("");
+    setPaymentType("CASH");
+    setPaymentStatus("NOT_PAID");
+    setAmount(firstCourse && Number.isFinite(firstCourse.price) ? String(firstCourse.price) : "");
+    setSubError("");
+  }
+
+  function closeSubscribe() {
+    setSubscribing(null);
+    setCourseId("");
+    setExpiresAt("");
+    setPaymentType("CASH");
+    setPaymentStatus("NOT_PAID");
+    setAmount("");
+    setSubError("");
+    setSubPending(false);
+  }
+
+  async function onSubscribe(e: React.FormEvent) {
+    e.preventDefault();
+    if (!subscribing) return;
+    if (!courseId) {
+      setSubError("Choose a course.");
+      return;
+    }
+    const paidAmount = Number(amount);
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+      setSubError("Enter a valid amount.");
+      return;
+    }
+    setSubError("");
+    setSubPending(true);
+    try {
+      await createAdminSubscription({
+        studentId: subscribing.studentId,
+        courseId,
+        expiresAt: expiresAt ? toExpiresAt(expiresAt) : null,
+        paymentType,
+        paymentStatus,
+        amount: Number(paidAmount.toFixed(2)),
+      });
+      closeSubscribe();
+      await loadMembers({ silent: true });
+    } catch (err) {
+      setSubError(err instanceof Error ? err.message : "Could not add this subscription.");
+    } finally {
+      setSubPending(false);
+    }
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -339,7 +464,9 @@ function UserPanel() {
       addUser({ name, phone, role });
       resetForm();
       setOpen(false);
+      setTab("non-subscribed");
       setPage(1);
+      void loadMembers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add this user.");
     }
@@ -350,7 +477,9 @@ function UserPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <h2 className="text-xl">User list</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{users.length} accounts</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {loading ? "Loading accounts…" : `${subscribed.length + unsubscribed.length} accounts`}
+          </p>
         </div>
         <button
           type="button"
@@ -364,6 +493,37 @@ function UserPanel() {
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
+        {(
+          [
+            { id: "subscribed" as const, label: "Subscribed", count: subscribed.length },
+            { id: "non-subscribed" as const, label: "Non subscribed", count: unsubscribed.length },
+          ]
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              tab === item.id
+                ? "bg-gold-gradient text-primary-foreground shadow-gold"
+                : "bg-secondary text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item.label}
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-xs font-semibold",
+                tab === item.id ? "bg-primary-foreground/20" : "bg-background/80",
+              )}
+            >
+              {item.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[36rem] text-left text-sm">
           <thead className="border-b border-border bg-secondary/60 text-xs tracking-[0.12em] text-muted-foreground uppercase">
@@ -372,19 +532,36 @@ function UserPanel() {
               <th className="px-6 py-3 font-semibold">Mobile</th>
               <th className="px-6 py-3 font-semibold">Role</th>
               <th className="px-6 py-3 font-semibold">Added</th>
+              {tab === "non-subscribed" ? (
+                <th className="px-6 py-3 font-semibold">Course</th>
+              ) : null}
               <th className="px-6 py-3 font-semibold">View</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {slice.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
-                  No users yet.
+                <td colSpan={tab === "non-subscribed" ? 6 : 5} className="px-6 py-10 text-center text-muted-foreground">
+                  Loading members…
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={tab === "non-subscribed" ? 6 : 5} className="px-6 py-10 text-center text-destructive">
+                  {loadError}
+                </td>
+              </tr>
+            ) : slice.length === 0 ? (
+              <tr>
+                <td colSpan={tab === "non-subscribed" ? 6 : 5} className="px-6 py-10 text-center text-muted-foreground">
+                  {tab === "subscribed"
+                    ? "No subscribed users yet."
+                    : "No non-subscribed users yet."}
                 </td>
               </tr>
             ) : (
               slice.map((user) => (
-                <tr key={user.phone} className="hover:bg-secondary/40">
+                <tr key={user.id} className="hover:bg-secondary/40">
                   <td className="px-6 py-4 font-semibold text-chocolate">{user.name}</td>
                   <td className="px-6 py-4 text-muted-foreground">{user.phone}</td>
                   <td className="px-6 py-4">
@@ -392,13 +569,21 @@ function UserPanel() {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {new Date(user.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">{formatMemberDate(user.createdAt)}</td>
+                  {tab === "non-subscribed" ? (
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-muted-foreground">{memberCoursesLabel(user)}</span>
+                        <button
+                          type="button"
+                          onClick={() => openSubscribe(user)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-chocolate transition-colors hover:bg-secondary"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add course
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
                   <td className="px-6 py-4">
                     <button
                       type="button"
@@ -475,6 +660,99 @@ function UserPanel() {
       </AdminModal>
 
       <AdminModal
+        open={Boolean(subscribing)}
+        title="Add course"
+        onClose={closeSubscribe}
+      >
+        {subscribing && (
+          <form onSubmit={onSubscribe} className="grid gap-4">
+            <p className="text-sm text-muted-foreground">
+              Add a subscription for{" "}
+              <span className="font-semibold text-chocolate">{subscribing.name}</span>
+              {subscribing.studentId ? ` (${subscribing.studentId})` : ""}.
+            </p>
+            <label className="block text-sm font-medium">
+              Course
+              <select
+                value={courseId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setCourseId(nextId);
+                  const selected = assignableCourses.find((course) => course.id === nextId);
+                  if (selected && Number.isFinite(selected.price)) {
+                    setAmount(String(selected.price));
+                  }
+                }}
+                className={cn(fieldClass, "mt-2")}
+              >
+                <option value="">Select a course</option>
+                {assignableCourses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium">
+              Payment type
+              <select
+                value={paymentType}
+                onChange={(e) => setPaymentType(e.target.value as "UPI" | "CASH")}
+                className={cn(fieldClass, "mt-2")}
+              >
+                <option value="UPI">UPI</option>
+                <option value="CASH">Cash</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium">
+              Payment status
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "NOT_PAID" | "PARTIAL")}
+                className={cn(fieldClass, "mt-2")}
+              >
+                <option value="PAID">Paid</option>
+                <option value="NOT_PAID">Un-paid</option>
+                <option value="PARTIAL">Partial</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium">
+              Amount
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+                placeholder="5000"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Expires at
+              <input
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className={cn(fieldClass, "mt-2")}
+              />
+            </label>
+            {assignableCourses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active courses are available yet.</p>
+            ) : null}
+            {subError && <p className="text-sm text-destructive">{subError}</p>}
+            <button
+              type="submit"
+              disabled={subPending || !courseId}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold disabled:pointer-events-none disabled:opacity-60"
+            >
+              {subPending ? "Adding…" : "Add subscription"}
+            </button>
+          </form>
+        )}
+      </AdminModal>
+
+      <AdminModal
         open={Boolean(viewing)}
         title={viewing ? viewing.name : "User courses"}
         onClose={() => setViewing(null)}
@@ -483,7 +761,11 @@ function UserPanel() {
           <div>
             <p className="text-sm text-muted-foreground">{viewing.phone}</p>
             {viewing.enrollments.filter((e) => e.paid > 0).length === 0 ? (
-              <p className="mt-6 text-sm text-muted-foreground">This user has not paid for a course yet.</p>
+              <p className="mt-6 text-sm text-muted-foreground">
+                {tab === "subscribed"
+                  ? "This member is subscribed. Course fee details were not returned by the server."
+                  : "This user has not paid for a course yet."}
+              </p>
             ) : (
               <div className="mt-4">
                 <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold tracking-wide uppercase">
@@ -506,9 +788,11 @@ function UserPanel() {
                             <tr key={row.courseId}>
                               <td className="py-3 pr-4">
                                 <p className="font-semibold text-chocolate">
-                                  {course?.title ?? row.courseId}
+                                  {course?.title ?? row.title}
                                 </p>
-                                <p className="text-xs text-muted-foreground">{course?.shortTitle}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {course?.shortTitle ?? row.shortTitle}
+                                </p>
                               </td>
                               <td className="py-3 font-semibold">{formatPrice(row.paid)}</td>
                             </tr>
@@ -533,86 +817,67 @@ function UserPanel() {
 }
 
 function CoursePanel() {
-  const courses = useCourses();
+  const { raw: courses, loading, error: loadError, reload } = useCourses({ includeInactive: true });
   const { page, setPage, pageCount, slice, from, to, total } = usePaged(courses);
-  const tracks = ["TNPSC", "TET", "Police", "Test Batch"];
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
   const [title, setTitle] = useState("");
-  const [shortTitle, setShortTitle] = useState("");
-  const [track, setTrack] = useState("TNPSC");
-  const [duration, setDuration] = useState("");
-  const [lessons, setLessons] = useState("");
+  const [description, setDescription] = useState("");
+  const [durationHours, setDurationHours] = useState("");
   const [price, setPrice] = useState("");
-  const [blurb, setBlurb] = useState("");
-  const [thumb, setThumb] = useState("");
-  const [thumbName, setThumbName] = useState("");
+  const [status, setStatus] = useState("ACTIVE");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [error, setError] = useState("");
 
   function resetForm() {
     setTitle("");
-    setShortTitle("");
-    setTrack("TNPSC");
-    setDuration("");
-    setLessons("");
+    setDescription("");
+    setDurationHours("");
     setPrice("");
-    setBlurb("");
-    setThumb("");
-    setThumbName("");
+    setStatus("ACTIVE");
+    setThumbnailUrl("");
     setError("");
   }
 
-  async function onThumbChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      const dataUrl = await readCourseThumbnail(file);
-      setThumb(dataUrl);
-      setThumbName(file.name);
-      setError("");
-    } catch (err) {
-      setThumb("");
-      setThumbName("");
-      setError(err instanceof Error ? err.message : "This image cannot be used.");
-    }
-  }
-
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (title.trim().length < 3 || shortTitle.trim().length < 2) {
-      setError("Add a course title and a short title.");
+    if (title.trim().length < 3) {
+      setError("Add a course title.");
       return;
     }
-    if (!duration.trim() || !price.trim() || Number(lessons) < 1) {
-      setError("Add duration, lesson count and price.");
-      return;
-    }
-    if (blurb.trim().length < 8) {
+    if (description.trim().length < 3) {
       setError("Add a short course description.");
       return;
     }
-    if (!thumb) {
-      setError(
-        `Upload a 16:10 thumbnail, at least ${COURSE_THUMB.width}×${COURSE_THUMB.height} — the same frame as the public course cards.`,
-      );
+    const hours = Number(durationHours);
+    const amount = Number(price);
+    if (!Number.isFinite(hours) || hours < 1 || !Number.isFinite(amount) || amount < 0) {
+      setError("Add duration in hours and a price.");
       return;
     }
+    if (!thumbnailUrl.trim()) {
+      setError("Add a thumbnail URL.");
+      return;
+    }
+    setError("");
+    setPending(true);
     try {
-      addCourse({
-        title,
-        shortTitle,
-        track,
-        duration,
-        lessons: Number(lessons),
-        price,
-        blurb,
-        image: thumb,
+      await addCourse({
+        title: title.trim(),
+        description: description.trim(),
+        durationHours: hours,
+        price: Number(amount.toFixed(2)),
+        status,
+        thumbnailUrl: thumbnailUrl.trim(),
       });
       resetForm();
       setOpen(false);
+      await reload();
       setPage(Math.ceil((courses.length + 1) / PAGE_SIZE));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add this course.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -621,7 +886,9 @@ function CoursePanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <h2 className="text-xl">Course list</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{courses.length} programmes</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {loading ? "Loading programmes…" : `${courses.length} programmes`}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link
@@ -649,16 +916,27 @@ function CoursePanel() {
             <tr>
               <th className="px-6 py-3 font-semibold">Thumb</th>
               <th className="px-6 py-3 font-semibold">Course</th>
-              <th className="px-6 py-3 font-semibold">Track</th>
+              <th className="px-6 py-3 font-semibold">Status</th>
               <th className="px-6 py-3 font-semibold">Duration</th>
-              <th className="px-6 py-3 font-semibold">Lessons</th>
               <th className="px-6 py-3 font-semibold">Price</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {slice.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
+                <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
+                  Loading courses…
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-10 text-center text-destructive">
+                  {loadError}
+                </td>
+              </tr>
+            ) : slice.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
                   No courses yet.
                 </td>
               </tr>
@@ -666,20 +944,31 @@ function CoursePanel() {
               slice.map((course) => (
                 <tr key={course.id} className="hover:bg-secondary/40">
                   <td className="px-6 py-4">
-                    <img
-                      src={course.image}
-                      alt=""
-                      className="h-10 w-16 rounded-md object-cover"
-                    />
+                    {course.thumbnailUrl ? (
+                      <img
+                        src={course.thumbnailUrl}
+                        alt=""
+                        className="h-10 w-16 rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-16 rounded-md bg-secondary" />
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <p className="font-semibold text-chocolate">{course.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{course.shortTitle}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                      {course.description}
+                    </p>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground">{course.track}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{course.duration}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{course.lessons}</td>
-                  <td className="px-6 py-4 font-semibold">{course.price}</td>
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                      {course.status || "ACTIVE"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {course.durationHours ? `${course.durationHours} hours` : "—"}
+                  </td>
+                  <td className="px-6 py-4 font-semibold">{formatPrice(course.price)}</td>
                 </tr>
               ))
             )}
@@ -710,101 +999,76 @@ function CoursePanel() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className={cn(fieldClass, "mt-2")}
-              placeholder="TNPSC Group II Full Course"
+              placeholder="IAS Prelims GS"
             />
           </label>
           <label className="block text-sm font-medium">
-            Short title
+            Duration (hours)
             <input
-              value={shortTitle}
-              onChange={(e) => setShortTitle(e.target.value)}
-              className={cn(fieldClass, "mt-2")}
-              placeholder="Group II"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Track
-            <select
-              value={track}
-              onChange={(e) => setTrack(e.target.value)}
-              className={cn(fieldClass, "mt-2")}
-            >
-              {tracks.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-medium">
-            Duration
-            <input
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className={cn(fieldClass, "mt-2")}
-              placeholder="6 months"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Lessons
-            <input
-              value={lessons}
-              onChange={(e) => setLessons(e.target.value)}
+              value={durationHours}
+              onChange={(e) => setDurationHours(e.target.value)}
               type="number"
               min={1}
               className={cn(fieldClass, "mt-2")}
-              placeholder="48"
+              placeholder="120"
             />
           </label>
-          <label className="block text-sm font-medium sm:col-span-2">
+          <label className="block text-sm font-medium">
             Price
             <input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              type="number"
+              min={0}
+              step="0.01"
               className={cn(fieldClass, "mt-2")}
-              placeholder="24000"
+              placeholder="9999.00"
             />
           </label>
+          <label className="block text-sm font-medium">
+            Status
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className={cn(fieldClass, "mt-2")}
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+          </label>
+          <label className="block text-sm font-medium sm:col-span-2">
+            Thumbnail URL
+            <input
+              value={thumbnailUrl}
+              onChange={(e) => setThumbnailUrl(e.target.value)}
+              className={cn(fieldClass, "mt-2")}
+              placeholder="https://example.com/thumb.jpg"
+            />
+          </label>
+          {thumbnailUrl.trim() ? (
+            <img
+              src={thumbnailUrl.trim()}
+              alt=""
+              className="aspect-16/10 w-full rounded-2xl object-cover sm:col-span-2"
+            />
+          ) : null}
           <label className="block text-sm font-medium sm:col-span-2">
             Description
             <textarea
-              value={blurb}
-              onChange={(e) => setBlurb(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-              placeholder="What this batch covers"
+              placeholder="Complete GS course"
             />
           </label>
-          <div className="sm:col-span-2">
-            <p className="text-sm font-medium">Course thumbnail</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Must be 16:10, at least {COURSE_THUMB.width}×{COURSE_THUMB.height} px — the same
-              size as the cards on the public course list. JPG, PNG or WebP, under 2.5 MB.
-            </p>
-            <label className="mt-3 flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-dashed border-border bg-background">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={onThumbChange}
-                className="sr-only"
-              />
-              {thumb ? (
-                <img src={thumb} alt="" className="aspect-16/10 w-full object-cover" />
-              ) : (
-                <span className="flex aspect-16/10 w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <ImagePlus className="h-6 w-6" />
-                  Upload 1200×800 thumbnail
-                </span>
-              )}
-            </label>
-            {thumbName && (
-              <p className="mt-2 text-xs text-muted-foreground">{thumbName}</p>
-            )}
-          </div>
           {error && <p className="text-sm text-destructive sm:col-span-2">{error}</p>}
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold sm:col-span-2"
+            disabled={pending}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold-gradient px-5 py-3 text-sm font-semibold text-primary-foreground shadow-gold disabled:pointer-events-none disabled:opacity-60 sm:col-span-2"
           >
-            Save course
+            {pending ? "Saving…" : "Save course"}
           </button>
         </form>
       </AdminModal>
