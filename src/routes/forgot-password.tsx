@@ -5,6 +5,7 @@ import { ArrowRight, Lock, Phone } from "lucide-react";
 import { isValidPhone, normalizePhone } from "@/lib/auth";
 import { forgotPassword, resetPassword } from "@/lib/api";
 import { Eyebrow } from "@/components/section";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({
@@ -43,6 +44,7 @@ function ForgotPasswordPage() {
     setPending(true);
     try {
       await forgotPassword(normalizePhone(phone));
+      toast.success("Reset request sent successfully.");
       setStep("password");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start password reset.");
@@ -65,6 +67,7 @@ function ForgotPasswordPage() {
     setPending(true);
     try {
       await resetPassword(normalizePhone(phone), password);
+      toast.success("Password updated successfully.");
       navigate({ to: "/login" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset this password.");

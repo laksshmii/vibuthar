@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Phone, User } from "lucide-react";
 import { useAuth, isValidPhone, homeFor } from "@/lib/auth";
 import { Eyebrow } from "@/components/section";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
@@ -51,6 +52,7 @@ function SignupPage() {
     setPending(true);
     try {
       await signup(name, phone, password);
+      toast.success("Account created successfully.");
       navigate({ to: "/login" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create this account.");

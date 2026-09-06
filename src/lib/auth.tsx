@@ -23,6 +23,7 @@ type AuthValue = {
   ready: boolean;
   login: (phone: string, password: string) => Promise<User>;
   signup: (name: string, phone: string, password: string) => Promise<void>;
+  patchUser: (partial: Partial<User>) => void;
   logout: () => void;
 };
 
@@ -126,6 +127,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         const next = toUser(remote.name || name, remote.phone || phone, remote.role);
         upsertUser({ ...next, password });
+      },
+      patchUser: (partial: Partial<User>) => {
+        setUser((current) => {
+          if (!current) return current;
+          const next = { ...current, ...partial };
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          upsertUser({ name: next.name, phone: next.phone, role: next.role });
+          return next;
+        });
       },
       logout: () => {
         window.localStorage.removeItem(STORAGE_KEY);

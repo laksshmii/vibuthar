@@ -49,9 +49,15 @@ export function SiteHeader() {
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
-              <span className="text-sm text-muted-foreground">
+              <Link
+                to="/profile"
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                  pathname === "/profile" && "bg-secondary text-foreground",
+                )}
+              >
                 {user.role === "admin" ? "Admin" : user.name}
-              </span>
+              </Link>
               <button
                 onClick={logout}
                 className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
@@ -103,15 +109,24 @@ export function SiteHeader() {
                 </Link>
               ))}
               {user ? (
-                <button
-                  onClick={() => {
-                    logout();
-                    setOpen(false);
-                  }}
-                  className="mt-2 rounded-full border border-border px-4 py-2.5 text-sm font-medium"
-                >
-                  Sign out
-                </button>
+                <>
+                  <Link
+                    to="/profile"
+                    onClick={() => setOpen(false)}
+                    className="rounded-full px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    {user.role === "admin" ? "Admin profile" : "Profile"}
+                  </Link>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setOpen(false);
+                    }}
+                    className="mt-2 rounded-full border border-border px-4 py-2.5 text-sm font-medium"
+                  >
+                    Sign out
+                  </button>
+                </>
               ) : (
                 <>
                   <Link

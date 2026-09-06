@@ -7,6 +7,7 @@ import { formatPrice, useUsers } from "@/lib/directory";
 import { createAdminCourseVideo, createAdminSubscription, deleteAdminImage, listAdminMembers, listPublicImages, registerAccount, updateAdminImage, uploadAdminImage, type AdminCourse, type AdminImage, type AdminMember, type MemberListKind } from "@/lib/api";
 import { homeFor, isValidPhone, normalizePhone, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const fieldClass =
   "w-full rounded-full border border-border bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -448,6 +449,7 @@ function UserPanel() {
         paymentStatus,
         amount: Number(paidAmount.toFixed(2)),
       });
+      toast.success("Subscription added successfully.");
       closeSubscribe();
       await loadMembers({ silent: true });
     } catch (err) {
@@ -480,6 +482,7 @@ function UserPanel() {
         password,
         role,
       });
+      toast.success("User added successfully.");
       resetForm();
       setOpen(false);
       setTab("non-subscribed");
@@ -929,6 +932,7 @@ function CoursePanel() {
         sortOrder: order,
         durationMinutes: minutes,
       });
+      toast.success("Video saved successfully.");
       closeVideoModal();
     } catch (err) {
       setVideoError(err instanceof Error ? err.message : "Could not add this video.");
@@ -968,6 +972,7 @@ function CoursePanel() {
         status,
         thumbnailUrl: thumbnailUrl.trim(),
       });
+      toast.success("Course saved successfully.");
       resetForm();
       setOpen(false);
       await reload();
@@ -1298,6 +1303,7 @@ function BannerPanel() {
     setPending(true);
     try {
       await uploadAdminImage(file);
+      toast.success("Banner saved successfully.");
       resetForm();
       setOpen(false);
       await loadImages();
@@ -1319,6 +1325,7 @@ function BannerPanel() {
       const valid = await pickValidatedFile(next);
       if (!valid) return;
       await updateAdminImage(imageId, valid);
+      toast.success("Image updated successfully.");
       await loadImages();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Could not replace this image.");

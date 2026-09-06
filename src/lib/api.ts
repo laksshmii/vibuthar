@@ -429,6 +429,24 @@ export type AuthApiUser = {
   subscribedCourses?: SubscribedCourse[];
 };
 
+export type UserProfile = {
+  userId: string;
+  name: string;
+  email: string;
+  ugDegree: string;
+  pgDegree: string;
+  address: string;
+  phone: string;
+};
+
+export type UpdateUserProfileInput = {
+  name: string;
+  email: string;
+  ugDegree: string;
+  pgDegree: string;
+  address: string;
+};
+
 export type SubscribedCourse = {
   courseId: string;
   title: string;
@@ -452,6 +470,54 @@ function pickSubscribedCourses(user: Record<string, unknown>): SubscribedCourse[
     });
   }
   return out;
+}
+
+function pickUserProfile(body: unknown): UserProfile {
+  const root = asRecord(body);
+  const data = asRecord(root?.["data"]) ?? root;
+  const user = asRecord(data?.["user"]) ?? data ?? {};
+  return {
+    userId: pickString(user["userId"], data?.["userId"], user["id"], data?.["id"]),
+    name: pickString(user["name"], data?.["name"]),
+    email: pickString(user["email"], data?.["email"]),
+    ugDegree: pickString(user["ugDegree"], user["ug_degree"], data?.["ugDegree"], data?.["ug_degree"]),
+    pgDegree: pickString(user["pgDegree"], user["pg_degree"], data?.["pgDegree"], data?.["pg_degree"]),
+    address: pickString(user["address"], data?.["address"]),
+    phone: pickString(user["phone"], data?.["phone"]).replace(/\D/g, "").slice(-10),
+  };
+}
+
+export async function getUserProfile() {
+  const body = await request("/api/users/profile", { method: "GET" }, "Could not load your profile.");
+  return pickUserProfile(body);
+}
+
+export async function updateUserProfile(userId: string, input: UpdateUserProfileInput) {
+  const body = await request(
+    `/api/users/${encodeURIComponent(userId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        email: input.email,
+        ugDegree: input.ugDegree,
+        pgDegree: input.pgDegree,
+        address: input.address,
+      }),
+    },
+    "Could not update your profile.",
+  );
+  const next = pickUserProfile(body);
+  return {
+    userId: next.userId || userId,
+    name: next.name || input.name,
+    email: next.email || input.email,
+    ugDegree: next.ugDegree || input.ugDegree,
+    pgDegree: next.pgDegree || input.pgDegree,
+    address: next.address || input.address,
+    phone: next.phone,
+  };
 }
 
 export function pickAuthUser(body: unknown): AuthApiUser {

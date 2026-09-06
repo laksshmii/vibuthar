@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Phone } from "lucide-react";
 import { useAuth, isValidPhone, homeFor } from "@/lib/auth";
 import { Eyebrow } from "@/components/section";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -46,6 +47,7 @@ function LoginPage() {
     setPending(true);
     try {
       const next = await login(phone, password);
+      toast.success("Signed in successfully.");
       navigate({ to: homeFor(next) });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in with these details.");

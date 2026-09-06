@@ -8,6 +8,7 @@ import { CourseThumbnail } from "@/components/course-thumbnail";
 import { Eyebrow } from "@/components/section";
 import { useAuth, isValidPhone } from "@/lib/auth";
 import { saveApplication } from "@/lib/applications";
+import { toast } from "sonner";
 
 type ApplySearch = { course: string };
 
@@ -65,6 +66,7 @@ function ApplyPage() {
     });
     upsertUser({ name: name.trim(), phone, role: "student" });
     enrollUser(phone, selected.id, parsePrice(selected.price));
+    toast.success("Application submitted successfully.");
     setSubmitted(true);
   }
 
