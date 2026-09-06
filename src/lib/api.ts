@@ -447,11 +447,41 @@ export type UpdateUserProfileInput = {
   address: string;
 };
 
+export type CourseVideo = {
+  id: string;
+  title: string;
+  videoUrl: string;
+  sortOrder: number;
+  durationMinutes: number;
+};
+
 export type SubscribedCourse = {
   courseId: string;
   title: string;
   subscribedAt?: string;
+  videos: CourseVideo[];
 };
+
+function pickCourseVideos(row: Record<string, unknown>): CourseVideo[] {
+  const list = row["videos"];
+  if (!Array.isArray(list)) return [];
+  const out: CourseVideo[] = [];
+  for (const item of list) {
+    const video = asRecord(item);
+    if (!video) continue;
+    const title = pickString(video["title"]);
+    const videoUrl = pickString(video["videoUrl"], video["video_url"], video["url"]);
+    if (!title && !videoUrl) continue;
+    out.push({
+      id: pickString(video["id"]) || videoUrl || title,
+      title: title || "Lecture",
+      videoUrl,
+      sortOrder: pickNumber(video["sortOrder"], video["sort_order"]) ?? 0,
+      durationMinutes: pickNumber(video["durationMinutes"], video["duration_minutes"]) ?? 0,
+    });
+  }
+  return out.sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title));
+}
 
 function pickSubscribedCourses(user: Record<string, unknown>): SubscribedCourse[] {
   const list = user["subscribedCourses"];
@@ -466,6 +496,7 @@ function pickSubscribedCourses(user: Record<string, unknown>): SubscribedCourse[
     out.push({
       courseId: courseId || title,
       title: title || courseId,
+      videos: pickCourseVideos(row),
       ...(pickString(row["subscribedAt"]) ? { subscribedAt: pickString(row["subscribedAt"]) } : {}),
     });
   }

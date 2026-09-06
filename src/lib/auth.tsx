@@ -64,8 +64,8 @@ function toUser(
     name: existing?.name || (admin ? "Admin" : name.trim() || "Aspirant"),
     phone: normalized,
     role: admin ? "admin" : "student",
-    userId: extra?.userId,
     subscribedCourses: extra?.subscribedCourses ?? [],
+    ...(extra?.userId ? { userId: extra.userId } : {}),
   };
 }
 
@@ -82,8 +82,15 @@ function readStoredUser(): User | null {
     };
     if (!parsed.phone) return null;
     return toUser(parsed.name ?? "Aspirant", parsed.phone, parsed.role, {
-      userId: parsed.userId,
-      subscribedCourses: Array.isArray(parsed.subscribedCourses) ? parsed.subscribedCourses : [],
+      ...(parsed.userId ? { userId: parsed.userId } : {}),
+      subscribedCourses: Array.isArray(parsed.subscribedCourses)
+        ? parsed.subscribedCourses.map((course) => ({
+            courseId: course.courseId,
+            title: course.title,
+            videos: Array.isArray(course.videos) ? course.videos : [],
+            ...(course.subscribedAt ? { subscribedAt: course.subscribedAt } : {}),
+          }))
+        : [],
     });
   } catch {
     return null;
@@ -110,8 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           deviceInfo: deviceInfo(),
         });
         const next = toUser(remote.name || "Aspirant", remote.phone || phone, remote.role, {
-          userId: remote.userId,
-          subscribedCourses: remote.subscribedCourses,
+          ...(remote.userId ? { userId: remote.userId } : {}),
+          ...(remote.subscribedCourses ? { subscribedCourses: remote.subscribedCourses } : {}),
         });
         upsertUser({ ...next, password });
         writeAuthToken(remote.token);

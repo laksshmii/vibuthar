@@ -3,15 +3,47 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { Lock, Play, Search, LayoutGrid, X, Youtube } from "lucide-react";
 import { useAuth, type User } from "@/lib/auth";
-import { useCourses } from "@/lib/catalog";
+import { type CourseVideo, type SubscribedCourse } from "@/lib/api";
 import {
-  videos,
+  formatLectureDuration,
   youtubeChannelUrl,
   youtubeEmbed,
+  youtubeIdFromUrl,
   youtubeThumb,
-  type Video,
 } from "@/data/content";
 import { cn } from "@/lib/utils";
+
+type LibraryVideo = {
+  key: string;
+  youtubeId: string;
+  title: string;
+  courseId: string;
+  courseTitle: string;
+  duration: string;
+  videoUrl: string;
+};
+
+function toLibraryVideo(course: SubscribedCourse, video: CourseVideo): LibraryVideo | null {
+  const youtubeId = youtubeIdFromUrl(video.videoUrl);
+  if (!youtubeId && !video.videoUrl) return null;
+  return {
+    key: `${course.courseId}-${video.id}`,
+    youtubeId,
+    title: video.title,
+    courseId: course.courseId,
+    courseTitle: course.title,
+    duration: formatLectureDuration(video.durationMinutes),
+    videoUrl: video.videoUrl,
+  };
+}
+
+function lecturesFor(subscribed: SubscribedCourse[]) {
+  return subscribed.flatMap((course) =>
+    (course.videos ?? [])
+      .map((video) => toLibraryVideo(course, video))
+      .filter((video): video is LibraryVideo => video !== null),
+  );
+}
 
 export const Route = createFileRoute("/library")({
   head: () => ({
@@ -71,8 +103,8 @@ function LockedState() {
 const ALL = "all";
 
 function Library({ user }: { user: User }) {
-  const { courses } = useCourses();
   const subscribed = user.subscribedCourses ?? [];
+  const lectures = lecturesFor(subscribed);
   const tabs = [
     { id: ALL, label: "All lectures", labelTa: "அனைத்து வகுப்புகள்" },
     ...subscribed.map((course) => ({
@@ -82,13 +114,13 @@ function Library({ user }: { user: User }) {
     })),
   ];
   const countFor = (tabId: string) =>
-    tabId === ALL ? videos.length : videos.filter((v) => v.courseId === tabId).length;
+    tabId === ALL ? lectures.length : lectures.filter((v) => v.courseId === tabId).length;
   const [tab, setTab] = useState(ALL);
   const [query, setQuery] = useState("");
-  const [playing, setPlaying] = useState<Video | null>(null);
+  const [playing, setPlaying] = useState<LibraryVideo | null>(null);
 
   const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0]!;
-  const list = videos.filter(
+  const list = lectures.filter(
     (v) =>
       (tab === ALL || v.courseId === tab) &&
       v.title.toLowerCase().includes(query.toLowerCase()),
@@ -161,7 +193,7 @@ function Library({ user }: { user: User }) {
           <AnimatePresence mode="popLayout">
             {list.map((video, i) => (
               <motion.article
-                key={video.id}
+                key={video.key}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -176,29 +208,34 @@ function Library({ user }: { user: User }) {
                   aria-label={`Play ${video.title}`}
                   className="relative aspect-16/9 overflow-hidden"
                 >
-                  <img
-                    src={youtubeThumb(video.id)}
-                    alt=""
-                    loading="lazy"
-                    draggable={false}
-                    width={480}
-                    height={360}
-                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
+                  {video.youtubeId ? (
+                    <img
+                      src={youtubeThumb(video.youtubeId)}
+                      alt=""
+                      loading="lazy"
+                      draggable={false}
+                      width={480}
+                      height={360}
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-secondary" />
+                  )}
                   <div className="absolute inset-0 bg-linear-to-t from-chocolate/70 to-transparent opacity-70" />
                   <span className="absolute inset-0 flex items-center justify-center">
                     <span className="flex h-13 w-13 items-center justify-center rounded-full bg-gold-gradient text-primary-foreground shadow-gold transition-all duration-300 group-hover:scale-110">
                       <Play className="h-5 w-5" />
                     </span>
                   </span>
-                  <span className="absolute right-3 bottom-3 rounded-full bg-chocolate/80 px-2.5 py-1 text-xs font-medium text-cream backdrop-blur-md">
-                    {video.duration}
-                  </span>
+                  {video.duration ? (
+                    <span className="absolute right-3 bottom-3 rounded-full bg-chocolate/80 px-2.5 py-1 text-xs font-medium text-cream backdrop-blur-md">
+                      {video.duration}
+                    </span>
+                  ) : null}
                 </button>
                 <div className="flex flex-1 flex-col p-5">
                   <span className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                    {subscribed.find((c) => c.courseId === video.courseId)?.title ??
-                      courses.find((c) => c.id === video.courseId)?.shortTitle}
+                    {video.courseTitle}
                   </span>
                   <h2 className="mt-2 flex-1 text-base leading-snug font-semibold">{video.title}</h2>
                   <button
@@ -215,7 +252,11 @@ function Library({ user }: { user: User }) {
 
         {list.length === 0 && (
           <p className="mt-16 text-center text-sm text-muted-foreground">
-            No lectures match that search yet.
+            {subscribed.length === 0
+              ? "No subscribed courses yet. Lectures appear here after a mentor assigns a programme."
+              : query
+                ? "No lectures match that search yet."
+                : "No lectures have been added to this course yet."}
           </p>
         )}
       </div>
@@ -225,7 +266,7 @@ function Library({ user }: { user: User }) {
   );
 }
 
-function VideoPlayer({ video, onClose }: { video: Video | null; onClose: () => void }) {
+function VideoPlayer({ video, onClose }: { video: LibraryVideo | null; onClose: () => void }) {
   useEffect(() => {
     if (!video) return;
     const onKey = (e: KeyboardEvent) => {
@@ -261,15 +302,19 @@ function VideoPlayer({ video, onClose }: { video: Video | null; onClose: () => v
             onContextMenu={(e) => e.preventDefault()}
             className="w-full max-w-4xl overflow-hidden rounded-3xl bg-card shadow-float select-none"
           >
-            <div className="aspect-video w-full bg-chocolate">
+            <div className="relative aspect-video w-full overflow-hidden bg-chocolate">
               <iframe
-                key={video.id}
-                src={youtubeEmbed(video.id)}
+                key={video.key}
+                src={video.youtubeId ? youtubeEmbed(video.youtubeId) : video.videoUrl}
                 title={video.title}
-                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full"
+                allow="accelerometer; autoplay; encrypted-media; gyroscope"
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+                className="pointer-events-auto h-full w-full"
               />
+              {/* Cover YouTube title/link (top) and logo (bottom-right) so they cannot open youtube.com */}
+              <div aria-hidden className="absolute inset-x-0 top-0 z-10 h-14" />
+              <div aria-hidden className="absolute right-0 bottom-0 z-10 h-[4.5rem] w-32" />
             </div>
             <div className="flex items-start justify-between gap-4 p-5">
               <div className="min-w-0">

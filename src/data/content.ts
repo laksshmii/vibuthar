@@ -219,12 +219,38 @@ export type Video = {
 
 export const youtubeThumb = (id: string) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 
+export function youtubeIdFromUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "youtu.be" || parsed.hostname.endsWith(".youtu.be")) {
+      return parsed.pathname.split("/").filter(Boolean)[0] ?? "";
+    }
+    const fromQuery = parsed.searchParams.get("v");
+    if (fromQuery) return fromQuery;
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const marker = parts.findIndex((part) => part === "embed" || part === "shorts" || part === "live");
+    if (marker >= 0 && parts[marker + 1]) return parts[marker + 1];
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+export function formatLectureDuration(minutes: number) {
+  if (!Number.isFinite(minutes) || minutes < 1) return "";
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
+  if (hours && rest) return `${hours}h ${rest}m`;
+  if (hours) return `${hours}h`;
+  return `${minutes} min`;
+}
+
 /**
  * Embed params chosen to keep students inside the library: no related videos,
  * no annotations and no keyboard shortcut that jumps out to YouTube.
  */
 export const youtubeEmbed = (id: string) =>
-  `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&playsinline=1`;
+  `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&playsinline=1&fs=0`;
 
 export const videos: Video[] = [
   {
